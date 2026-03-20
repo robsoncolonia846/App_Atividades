@@ -1,4 +1,5 @@
 ﻿const STORAGE_KEY = "tasks_v1";
+const ENABLE_FILE_SYNC = false;
 const BASE_FILE_NAME = "atividades-base.json";
 const HANDLE_DB_NAME = "atividades_sync_db";
 const HANDLE_STORE_NAME = "kv";
@@ -281,11 +282,18 @@ async function loadFromImportedFile(file) {
   }
 }
 
-syncJsonBtn.addEventListener("click", () => {
-  void chooseJsonBase();
-});
+if (syncJsonBtn) {
+  syncJsonBtn.addEventListener("click", () => {
+    if (!ENABLE_FILE_SYNC) {
+      setStorageSource("Base: local");
+      setSyncStatus("Sincronizacao por arquivo desativada nesta versao. Dados salvos localmente.");
+      return;
+    }
+    void chooseJsonBase();
+  });
+}
 
-if (jsonFileInputEl) {
+if (jsonFileInputEl && ENABLE_FILE_SYNC) {
   jsonFileInputEl.addEventListener("change", () => {
     const file = jsonFileInputEl.files && jsonFileInputEl.files[0];
     void loadFromImportedFile(file);
@@ -431,7 +439,9 @@ function normalizeTasks(list) {
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-  scheduleFileSync();
+  if (ENABLE_FILE_SYNC) {
+    scheduleFileSync();
+  }
 }
 
 function sortOpenTasks(list) {
@@ -1045,11 +1055,10 @@ function formatDateWithWeekday(iso) {
   return `${dt.toLocaleDateString("pt-BR")} (${weekdays[dt.getDay()]})`;
 }
 
-if (supportsFileSync()) {
-  setSyncStatus("Clique em Sincronizar JSON para escolher o arquivo base (local ou nuvem).");
-} else {
-  setSyncStatus("Seu navegador nao permite gravacao direta em arquivo. A importacao funciona em modo local.");
-}
+setStorageSource("Base: local");
+setSyncStatus("Dados salvos neste navegador (modo local).");
 render();
-void tryAutoReconnectSavedHandle();
+if (ENABLE_FILE_SYNC) {
+  void tryAutoReconnectSavedHandle();
+}
 

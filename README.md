@@ -1,28 +1,23 @@
 # App de Atividades (PWA)
 
 ## Funcionalidades
-- Organizar atividades por data.
-- Marcar concluida com 1 clique.
+- Criar e editar atividades com data.
+- Marcar como concluida com 1 clique.
 - Recorrencia diaria, semanal e mensal.
-- Agrupamento: em aberto, concluidas e excluidas.
-- Painel mensal com numeracao das atividades.
-- Sincronizacao em arquivo JSON escolhido pelo usuario.
+- Agrupar atividades em aberto por periodo.
+- Ver painel mensal com numeracao das atividades.
 
-## Sincronizacao JSON
-1. Abra o app.
-2. Clique em `Sincronizar JSON`.
-3. Escolha onde fica o arquivo base (`.json`), local ou nuvem (ex.: OneDrive).
-4. Depois disso, toda alteracao passa a ser salva automaticamente nesse arquivo.
-
-Observacao:
-- Em navegadores sem suporte de gravacao direta em arquivo, o app permite importacao do JSON e continua salvando localmente.
+## Armazenamento
+- Esta versao salva os dados em modo local (`localStorage`) no navegador/dispositivo.
+- Nao usa login e nao depende de nuvem para funcionar.
 
 ## Publicacao no GitHub Pages
-1. Envie estes arquivos para o repositorio:
+1. Envie:
 - `index.html`
 - `styles.css`
 - `app.js`
 - `manifest.json`
-2. Em Settings > Pages:
-- Source: Deploy from a branch
-- Branch: `main` / `(root)`
+- `README.md`
+2. Em `Settings > Pages`:
+- Source: `Deploy from a branch`
+- Branch: `main / (root)`
