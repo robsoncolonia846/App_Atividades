@@ -63,6 +63,36 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  justify-content: space-between;
+}
+
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#auth-user {
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.auth-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 0.76rem;
+  color: #fff;
+  background: #334155;
+  cursor: pointer;
+}
+
+#cloud-status {
+  display: block;
+  margin-top: 8px;
+  color: #4b5563;
+  font-size: 0.78rem;
 }
 
 form {

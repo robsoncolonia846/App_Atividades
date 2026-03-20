@@ -18,7 +18,13 @@
       <section class="card form-card">
         <div class="top-actions">
           <button id="toggle-form-btn" type="button" class="toggle-form-btn">Nova atividade</button>
+          <div class="auth-actions">
+            <span id="auth-user">Modo local</span>
+            <button id="sign-in-btn" type="button" class="auth-btn">Entrar Google</button>
+            <button id="sign-out-btn" type="button" class="auth-btn" hidden>Sair</button>
+          </div>
         </div>
+        <small id="cloud-status"></small>
 
         <form id="task-form" hidden>
           <label>
@@ -113,6 +119,6 @@
       </li>
     </template>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

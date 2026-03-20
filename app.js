@@ -1,7 +1,29 @@
-﻿const STORAGE_KEY = "tasks_v1";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import {
+  doc,
+  getFirestore,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { FIREBASE_CONFIG, FIREBASE_ENABLED } from "./firebase-config.js";
+
+const STORAGE_KEY = "tasks_v1";
 
 const form = document.getElementById("task-form");
 const toggleFormBtn = document.getElementById("toggle-form-btn");
+const signInBtn = document.getElementById("sign-in-btn");
+const signOutBtn = document.getElementById("sign-out-btn");
+const authUserEl = document.getElementById("auth-user");
+const cloudStatusEl = document.getElementById("cloud-status");
+
 const titleInput = document.getElementById("title");
 const dueDateInput = document.getElementById("dueDate");
 const recurrenceInput = document.getElementById("recurrence");
@@ -28,6 +50,135 @@ let taskNumberMap = {};
 let sameDateMetaMap = {};
 let monthCursor = new Date();
 monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+
+let auth = null;
+let db = null;
+let currentUser = null;
+let unsubscribeCloud = null;
+let syncTimer = null;
+let isApplyingRemoteSnapshot = false;
+
+function isCloudAvailable() {
+  return Boolean(auth && db && currentUser);
+}
+
+function cloudDocRef(uid) {
+  return doc(db, "users", uid, "state", "tasks");
+}
+
+function setCloudStatus(text) {
+  cloudStatusEl.textContent = text;
+}
+
+function scheduleCloudSync(immediate = false) {
+  if (!isCloudAvailable() || isApplyingRemoteSnapshot) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  const delay = immediate ? 50 : 500;
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    syncNow();
+  }, delay);
+}
+
+async function syncNow() {
+  if (!isCloudAvailable()) return;
+  try {
+    await setDoc(
+      cloudDocRef(currentUser.uid),
+      {
+        tasks,
+        updatedAt: serverTimestamp(),
+        email: currentUser.email || "",
+      },
+      { merge: true },
+    );
+    setCloudStatus("Sincronizado com a nuvem.");
+  } catch {
+    setCloudStatus("Falha ao sincronizar. Verifique internet/permissoes.");
+  }
+}
+
+function initFirebase() {
+  if (!FIREBASE_ENABLED) {
+    signInBtn.disabled = true;
+    setCloudStatus("Firebase nao configurado. Edite firebase-config.js para ativar login/sync.");
+    return;
+  }
+
+  try {
+    const app = initializeApp(FIREBASE_CONFIG);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    setCloudStatus("Firebase pronto. Entre com Google para sincronizar.");
+  } catch {
+    signInBtn.disabled = true;
+    setCloudStatus("Erro ao iniciar Firebase.");
+    return;
+  }
+
+  signInBtn.addEventListener("click", async () => {
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch {
+      setCloudStatus("Login cancelado ou bloqueado pelo navegador.");
+    }
+  });
+
+  signOutBtn.addEventListener("click", async () => {
+    try {
+      await signOut(auth);
+    } catch {
+      setCloudStatus("Falha ao sair da conta.");
+    }
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    if (unsubscribeCloud) {
+      unsubscribeCloud();
+      unsubscribeCloud = null;
+    }
+
+    currentUser = user || null;
+    signInBtn.hidden = Boolean(user);
+    signOutBtn.hidden = !user;
+
+    if (!user) {
+      authUserEl.textContent = "Modo local";
+      setCloudStatus("Sem login. Dados apenas neste dispositivo.");
+      return;
+    }
+
+    authUserEl.textContent = user.email || "Usuario";
+    setCloudStatus("Conectado. Sincronizando...");
+
+    unsubscribeCloud = onSnapshot(
+      cloudDocRef(user.uid),
+      (snapshot) => {
+        const data = snapshot.data();
+        const cloudTasks = data && Array.isArray(data.tasks) ? data.tasks : null;
+
+        if (!cloudTasks) {
+          if (tasks.length > 0) {
+            scheduleCloudSync(true);
+          } else {
+            setCloudStatus("Nuvem pronta. Nenhum dado salvo ainda.");
+          }
+          return;
+        }
+
+        isApplyingRemoteSnapshot = true;
+        tasks = normalizeTasks(cloudTasks);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        render();
+        isApplyingRemoteSnapshot = false;
+        setCloudStatus("Dados carregados da nuvem.");
+      },
+      () => {
+        setCloudStatus("Erro ao ler nuvem. Verifique regras do Firestore.");
+      },
+    );
+  });
+}
 
 function captureTaskPositions() {
   const map = new Map();
@@ -84,8 +235,6 @@ monthNextBtn.addEventListener("click", () => {
   monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
   renderMonthlyPanel();
 });
-
-render();
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -170,6 +319,7 @@ function normalizeTasks(list) {
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  scheduleCloudSync(false);
 }
 
 function sortOpenTasks(list) {
@@ -588,19 +738,23 @@ function renderTask(task, mode) {
 
     toggleBtn.addEventListener("click", () => toggleComplete(task.id));
     dateBtn.addEventListener("click", () => {
-      datePicker.classList.toggle("show");
-      if (datePicker.classList.contains("show")) {
-        try {
-          datePicker.showPicker();
-        } catch {
-          datePicker.focus();
-        }
+      datePicker.classList.add("show");
+      try {
+        datePicker.showPicker();
+      } catch {
+        datePicker.focus();
+        datePicker.click();
       }
     });
 
     datePicker.addEventListener("change", () => {
       if (!datePicker.value) return;
       updateTaskDate(task.id, datePicker.value);
+      datePicker.classList.remove("show");
+    });
+
+    datePicker.addEventListener("blur", () => {
+      datePicker.classList.remove("show");
     });
 
     minusBtn.addEventListener("click", () => postpone(task.id, -1));
@@ -778,3 +932,6 @@ function formatDateWithWeekday(iso) {
   const weekdays = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
   return `${dt.toLocaleDateString("pt-BR")} (${weekdays[dt.getDay()]})`;
 }
+
+initFirebase();
+render();
