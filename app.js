@@ -7,6 +7,10 @@ const dueDateInput = document.getElementById("dueDate");
 const recurrenceInput = document.getElementById("recurrence");
 const submitBtn = document.getElementById("submit-btn");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
+const exportBackupBtn = document.getElementById("export-backup-btn");
+const importBackupBtn = document.getElementById("import-backup-btn");
+const importBackupFileInput = document.getElementById("import-backup-file");
+const backupStatusEl = document.getElementById("backup-status");
 
 const openListEl = document.getElementById("task-list-open");
 const doneListEl = document.getElementById("task-list-done");
@@ -48,6 +52,50 @@ monthPrevBtn.addEventListener("click", () => {
 monthNextBtn.addEventListener("click", () => {
   monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
   renderMonthlyPanel();
+});
+
+exportBackupBtn.addEventListener("click", () => {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    storageKey: STORAGE_KEY,
+    tasks,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  a.href = url;
+  a.download = `atividades-backup-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  backupStatusEl.textContent = "Backup exportado. Agora suba este arquivo na sua nuvem.";
+});
+
+importBackupBtn.addEventListener("click", () => {
+  importBackupFileInput.click();
+});
+
+importBackupFileInput.addEventListener("change", async () => {
+  const file = importBackupFileInput.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const importedTasks = Array.isArray(parsed) ? parsed : parsed.tasks;
+    if (!Array.isArray(importedTasks)) {
+      throw new Error("Formato de backup invalido.");
+    }
+
+    tasks = normalizeTasks(importedTasks);
+    persist();
+    render();
+    backupStatusEl.textContent = "Backup importado com sucesso.";
+  } catch {
+    backupStatusEl.textContent = "Falha ao importar backup. Verifique se o arquivo JSON e valido.";
+  } finally {
+    importBackupFileInput.value = "";
+  }
 });
 
 render();
@@ -110,16 +158,27 @@ function loadTasks() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-
-    return parsed.map((task) => ({
-      ...task,
-      deleted: Boolean(task.deleted),
-      deletedAt: task.deletedAt || null,
-      rank: task.rank ?? task.createdAt ?? Date.now(),
-    }));
+    return normalizeTasks(parsed);
   } catch {
     return [];
   }
+}
+
+function normalizeTasks(list) {
+  return list.map((task) => ({
+    ...task,
+    id: task.id || crypto.randomUUID(),
+    title: String(task.title || "").trim(),
+    dueDate: task.dueDate || todayIso(),
+    recurrence: task.recurrence || "none",
+    completed: Boolean(task.completed),
+    completedAt: task.completedAt || null,
+    nextDueDate: task.nextDueDate || null,
+    deleted: Boolean(task.deleted),
+    deletedAt: task.deletedAt || null,
+    rank: task.rank ?? task.createdAt ?? Date.now(),
+    createdAt: task.createdAt ?? Date.now(),
+  }));
 }
 
 function persist() {
@@ -344,6 +403,33 @@ function toggleComplete(id) {
   render();
 }
 
+function slowScrollToTop(durationMs = 900) {
+  const startY = window.scrollY || window.pageYOffset;
+  if (startY <= 0) return;
+
+  const startTime = performance.now();
+
+  function easeInOutCubic(t) {
+    return t < 0.5
+      ? 4 * t * t * t
+      : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / durationMs, 1);
+    const eased = easeInOutCubic(progress);
+    const nextY = startY * (1 - eased);
+    window.scrollTo(0, nextY);
+
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
 function startEdit(id) {
   const task = tasks.find((t) => t.id === id);
   if (!task || task.deleted) return;
@@ -355,7 +441,7 @@ function startEdit(id) {
   submitBtn.textContent = "Salvar edicao";
   cancelEditBtn.hidden = false;
   setFormOpen(true);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  slowScrollToTop(1000);
   titleInput.focus();
 }
 
@@ -368,7 +454,7 @@ function reuseTask(id) {
   dueDateInput.value = todayIso();
   recurrenceInput.value = task.recurrence || "none";
   setFormOpen(true);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  slowScrollToTop(1000);
   titleInput.focus();
 }
 
