@@ -1,28 +1,15 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import {
-  doc,
-  getFirestore,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { FIREBASE_CONFIG, FIREBASE_ENABLED } from "./firebase-config.js";
-
-const STORAGE_KEY = "tasks_v1";
+﻿const STORAGE_KEY = "tasks_v1";
+const BASE_FILE_NAME = "atividades-base.json";
+const HANDLE_DB_NAME = "atividades_sync_db";
+const HANDLE_STORE_NAME = "kv";
+const HANDLE_KEY = "json_file_handle";
 
 const form = document.getElementById("task-form");
 const toggleFormBtn = document.getElementById("toggle-form-btn");
-const signInBtn = document.getElementById("sign-in-btn");
-const signOutBtn = document.getElementById("sign-out-btn");
-const authUserEl = document.getElementById("auth-user");
-const cloudStatusEl = document.getElementById("cloud-status");
+const syncJsonBtn = document.getElementById("sync-json-btn");
+const storageSourceEl = document.getElementById("storage-source");
+const syncStatusEl = document.getElementById("sync-status");
+const jsonFileInputEl = document.getElementById("json-file-input");
 
 const titleInput = document.getElementById("title");
 const dueDateInput = document.getElementById("dueDate");
@@ -51,132 +38,257 @@ let sameDateMetaMap = {};
 let monthCursor = new Date();
 monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
 
-let auth = null;
-let db = null;
-let currentUser = null;
-let unsubscribeCloud = null;
-let syncTimer = null;
-let isApplyingRemoteSnapshot = false;
+let syncedFileHandle = null;
+let fileSyncTimer = null;
+let isWritingFile = false;
 
-function isCloudAvailable() {
-  return Boolean(auth && db && currentUser);
+function setSyncStatus(text) {
+  syncStatusEl.textContent = text;
 }
 
-function cloudDocRef(uid) {
-  return doc(db, "users", uid, "state", "tasks");
+function setStorageSource(text) {
+  storageSourceEl.textContent = text;
 }
 
-function setCloudStatus(text) {
-  cloudStatusEl.textContent = text;
+function supportsFileSync() {
+  return typeof window.showSaveFilePicker === "function";
 }
 
-function scheduleCloudSync(immediate = false) {
-  if (!isCloudAvailable() || isApplyingRemoteSnapshot) return;
-  if (syncTimer) clearTimeout(syncTimer);
-  const delay = immediate ? 50 : 500;
-  syncTimer = setTimeout(() => {
-    syncTimer = null;
-    syncNow();
-  }, delay);
-}
-
-async function syncNow() {
-  if (!isCloudAvailable()) return;
-  try {
-    await setDoc(
-      cloudDocRef(currentUser.uid),
-      {
-        tasks,
-        updatedAt: serverTimestamp(),
-        email: currentUser.email || "",
-      },
-      { merge: true },
-    );
-    setCloudStatus("Sincronizado com a nuvem.");
-  } catch {
-    setCloudStatus("Falha ao sincronizar. Verifique internet/permissoes.");
-  }
-}
-
-function initFirebase() {
-  if (!FIREBASE_ENABLED) {
-    signInBtn.disabled = true;
-    setCloudStatus("Firebase nao configurado. Edite firebase-config.js para ativar login/sync.");
-    return;
-  }
-
-  try {
-    const app = initializeApp(FIREBASE_CONFIG);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    setCloudStatus("Firebase pronto. Entre com Google para sincronizar.");
-  } catch {
-    signInBtn.disabled = true;
-    setCloudStatus("Erro ao iniciar Firebase.");
-    return;
-  }
-
-  signInBtn.addEventListener("click", async () => {
-    try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch {
-      setCloudStatus("Login cancelado ou bloqueado pelo navegador.");
-    }
+function openHandleDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(HANDLE_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(HANDLE_STORE_NAME)) {
+        db.createObjectStore(HANDLE_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
+}
 
-  signOutBtn.addEventListener("click", async () => {
-    try {
-      await signOut(auth);
-    } catch {
-      setCloudStatus("Falha ao sair da conta.");
-    }
+async function idbSet(key, value) {
+  const db = await openHandleDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HANDLE_STORE_NAME, "readwrite");
+    tx.objectStore(HANDLE_STORE_NAME).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
+}
 
-  onAuthStateChanged(auth, (user) => {
-    if (unsubscribeCloud) {
-      unsubscribeCloud();
-      unsubscribeCloud = null;
+async function idbGet(key) {
+  const db = await openHandleDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HANDLE_STORE_NAME, "readonly");
+    const req = tx.objectStore(HANDLE_STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveHandleForAutoReconnect(handle) {
+  if (!("indexedDB" in window)) return;
+  try {
+    await idbSet(HANDLE_KEY, handle);
+  } catch {
+    // Some browsers may block storing handles; app still works without auto reconnect.
+  }
+}
+
+async function readSavedHandle() {
+  if (!("indexedDB" in window)) return null;
+  try {
+    return await idbGet(HANDLE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function hasReadWritePermission(handle) {
+  const current = await handle.queryPermission({ mode: "readwrite" });
+  return current === "granted";
+}
+
+async function ensureReadWritePermission(handle) {
+  const current = await handle.queryPermission({ mode: "readwrite" });
+  if (current === "granted") return true;
+  const requested = await handle.requestPermission({ mode: "readwrite" });
+  return requested === "granted";
+}
+
+async function readTasksFromHandle(handle) {
+  const file = await handle.getFile();
+  const text = await file.text();
+  if (!text.trim()) return [];
+
+  const data = JSON.parse(text);
+  if (!Array.isArray(data)) throw new Error("JSON invalido");
+  return normalizeTasks(data);
+}
+
+async function writeTasksToHandle(handle) {
+  if (!handle || isWritingFile) return;
+  isWritingFile = true;
+
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(tasks, null, 2));
+    await writable.close();
+    setSyncStatus(`Sincronizado em arquivo JSON (${new Date().toLocaleTimeString("pt-BR")}).`);
+  } catch {
+    setSyncStatus("Falha ao gravar no arquivo. Verifique permissoes.");
+  } finally {
+    isWritingFile = false;
+  }
+}
+
+function scheduleFileSync() {
+  if (!syncedFileHandle) return;
+  if (fileSyncTimer) clearTimeout(fileSyncTimer);
+
+  fileSyncTimer = setTimeout(() => {
+    fileSyncTimer = null;
+    void writeTasksToHandle(syncedFileHandle);
+  }, 300);
+}
+
+async function connectHandle(handle, options = {}) {
+  const { requestPermission = true } = options;
+
+  try {
+    const allowed = requestPermission
+      ? await ensureReadWritePermission(handle)
+      : await hasReadWritePermission(handle);
+
+    if (!allowed) {
+      setSyncStatus("Permissao negada para o arquivo JSON.");
+      return false;
     }
 
-    currentUser = user || null;
-    signInBtn.hidden = Boolean(user);
-    signOutBtn.hidden = !user;
+    const loaded = await readTasksFromHandle(handle);
+    syncedFileHandle = handle;
+    setStorageSource(`Base: ${handle.name}`);
 
-    if (!user) {
-      authUserEl.textContent = "Modo local";
-      setCloudStatus("Sem login. Dados apenas neste dispositivo.");
+    if (loaded.length > 0 || tasks.length === 0) {
+      tasks = loaded;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      render();
+      setSyncStatus("Arquivo conectado. Dados carregados e sincronizacao ativa.");
+    } else {
+      setSyncStatus("Arquivo vazio conectado. Mantidos dados atuais e sincronizacao ativa.");
+    }
+
+    await saveHandleForAutoReconnect(handle);
+    return true;
+  } catch {
+    setSyncStatus("Nao foi possivel conectar esse arquivo JSON.");
+    return false;
+  }
+}
+
+async function tryAutoReconnectSavedHandle() {
+  if (!supportsFileSync()) return false;
+
+  const savedHandle = await readSavedHandle();
+  if (!savedHandle) return false;
+
+  const connected = await connectHandle(savedHandle, { requestPermission: false });
+  if (!connected) {
+    setSyncStatus("Base salva encontrada, mas o navegador pediu nova permissao. Clique em Sincronizar JSON.");
+    return false;
+  }
+
+  await writeTasksToHandle(savedHandle);
+  setStorageSource(`Base: ${savedHandle.name}`);
+  setSyncStatus("Base JSON reconectada automaticamente.");
+  return true;
+}
+
+async function chooseJsonBase() {
+  if (supportsFileSync() && typeof window.showOpenFilePicker === "function") {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: "Arquivo JSON",
+            accept: { "application/json": [".json"] },
+          },
+        ],
+      });
+
+      const connected = await connectHandle(handle);
+      if (connected) {
+        await writeTasksToHandle(handle);
+      }
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      setSyncStatus("Falha ao abrir seletor de arquivo. Tente novamente.");
+      return;
+    }
+  }
+
+  if (supportsFileSync()) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: BASE_FILE_NAME,
+        types: [
+          {
+            description: "Arquivo JSON",
+            accept: { "application/json": [".json"] },
+          },
+        ],
+      });
+
+      const connected = await connectHandle(handle);
+      if (connected) {
+        await writeTasksToHandle(handle);
+      }
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      setSyncStatus("Falha ao abrir seletor de arquivo. Tente novamente.");
+      return;
+    }
+  }
+
+  if (jsonFileInputEl) {
+    jsonFileInputEl.value = "";
+    jsonFileInputEl.click();
+  }
+}
+
+async function loadFromImportedFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) {
+      setSyncStatus("JSON invalido. O arquivo precisa conter uma lista de atividades.");
       return;
     }
 
-    authUserEl.textContent = user.email || "Usuario";
-    setCloudStatus("Conectado. Sincronizando...");
+    tasks = normalizeTasks(parsed);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    setStorageSource(`Base: importada (${file.name})`);
+    setSyncStatus("Arquivo importado. Neste navegador, a gravacao continua local.");
+    render();
+  } catch {
+    setSyncStatus("Erro ao ler/importar o JSON.");
+  }
+}
 
-    unsubscribeCloud = onSnapshot(
-      cloudDocRef(user.uid),
-      (snapshot) => {
-        const data = snapshot.data();
-        const cloudTasks = data && Array.isArray(data.tasks) ? data.tasks : null;
+syncJsonBtn.addEventListener("click", () => {
+  void chooseJsonBase();
+});
 
-        if (!cloudTasks) {
-          if (tasks.length > 0) {
-            scheduleCloudSync(true);
-          } else {
-            setCloudStatus("Nuvem pronta. Nenhum dado salvo ainda.");
-          }
-          return;
-        }
-
-        isApplyingRemoteSnapshot = true;
-        tasks = normalizeTasks(cloudTasks);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-        render();
-        isApplyingRemoteSnapshot = false;
-        setCloudStatus("Dados carregados da nuvem.");
-      },
-      () => {
-        setCloudStatus("Erro ao ler nuvem. Verifique regras do Firestore.");
-      },
-    );
+if (jsonFileInputEl) {
+  jsonFileInputEl.addEventListener("change", () => {
+    const file = jsonFileInputEl.files && jsonFileInputEl.files[0];
+    void loadFromImportedFile(file);
   });
 }
 
@@ -319,7 +431,7 @@ function normalizeTasks(list) {
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-  scheduleCloudSync(false);
+  scheduleFileSync();
 }
 
 function sortOpenTasks(list) {
@@ -933,5 +1045,11 @@ function formatDateWithWeekday(iso) {
   return `${dt.toLocaleDateString("pt-BR")} (${weekdays[dt.getDay()]})`;
 }
 
-initFirebase();
+if (supportsFileSync()) {
+  setSyncStatus("Clique em Sincronizar JSON para escolher o arquivo base (local ou nuvem).");
+} else {
+  setSyncStatus("Seu navegador nao permite gravacao direta em arquivo. A importacao funciona em modo local.");
+}
 render();
+void tryAutoReconnectSavedHandle();
+

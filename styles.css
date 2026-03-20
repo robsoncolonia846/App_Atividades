@@ -66,19 +66,19 @@ body {
   justify-content: space-between;
 }
 
-.auth-actions {
+.sync-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-#auth-user {
+#storage-source {
   font-size: 0.78rem;
   color: #334155;
 }
 
-.auth-btn {
+.sync-btn {
   border: none;
   border-radius: 8px;
   padding: 7px 9px;
@@ -88,7 +88,7 @@ body {
   cursor: pointer;
 }
 
-#cloud-status {
+#sync-status {
   display: block;
   margin-top: 8px;
   color: #4b5563;

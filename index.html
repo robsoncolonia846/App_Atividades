@@ -18,13 +18,12 @@
       <section class="card form-card">
         <div class="top-actions">
           <button id="toggle-form-btn" type="button" class="toggle-form-btn">Nova atividade</button>
-          <div class="auth-actions">
-            <span id="auth-user">Modo local</span>
-            <button id="sign-in-btn" type="button" class="auth-btn">Entrar Google</button>
-            <button id="sign-out-btn" type="button" class="auth-btn" hidden>Sair</button>
+          <div class="sync-actions">
+            <span id="storage-source">Base: local</span>
+            <button id="sync-json-btn" type="button" class="sync-btn">Sincronizar JSON</button>
           </div>
         </div>
-        <small id="cloud-status"></small>
+        <small id="sync-status"></small>
 
         <form id="task-form" hidden>
           <label>
@@ -97,6 +96,8 @@
       </section>
     </main>
 
+    <input id="json-file-input" type="file" accept=".json,application/json" hidden />
+
     <template id="task-template">
       <li class="task-item">
         <button class="btn-toggle" title="Concluir ou reativar" aria-label="Concluir ou reativar" type="button"></button>
@@ -119,6 +120,6 @@
       </li>
     </template>
 
-    <script type="module" src="app.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>

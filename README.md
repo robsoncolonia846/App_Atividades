@@ -1,32 +1,21 @@
-﻿# App de Atividades (PWA)
+# App de Atividades (PWA)
 
 ## Funcionalidades
-- Login com Google (Firebase Auth)
-- Sincronizacao em nuvem por usuario (Firestore)
-- Organizar por data
-- Concluir, reagendar e recorrencia
-- Painel mensal
+- Organizar atividades por data.
+- Marcar concluida com 1 clique.
+- Recorrencia diaria, semanal e mensal.
+- Agrupamento: em aberto, concluidas e excluidas.
+- Painel mensal com numeracao das atividades.
+- Sincronizacao em arquivo JSON escolhido pelo usuario.
 
-## Setup do Firebase
-1. Crie um projeto no Firebase.
-2. Ative Authentication > Sign-in method > Google.
-3. Ative Firestore Database (modo de producao recomendado depois de testar).
-4. Em Project settings > General > Your apps (Web), copie as chaves.
-5. Preencha o arquivo `firebase-config.js`.
+## Sincronizacao JSON
+1. Abra o app.
+2. Clique em `Sincronizar JSON`.
+3. Escolha onde fica o arquivo base (`.json`), local ou nuvem (ex.: OneDrive).
+4. Depois disso, toda alteracao passa a ser salva automaticamente nesse arquivo.
 
-## Regras Firestore (exemplo seguro por usuario)
-Use no Firestore Rules:
-
-```txt
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/state/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
-```
+Observacao:
+- Em navegadores sem suporte de gravacao direta em arquivo, o app permite importacao do JSON e continua salvando localmente.
 
 ## Publicacao no GitHub Pages
 1. Envie estes arquivos para o repositorio:
@@ -34,12 +23,6 @@ service cloud.firestore {
 - `styles.css`
 - `app.js`
 - `manifest.json`
-- `firebase-config.js`
 2. Em Settings > Pages:
 - Source: Deploy from a branch
-- Branch: main / (root)
-
-## Uso
-- Entre com Google
-- Os dados ficam vinculados ao usuario logado
-- Sem login, o app funciona localmente no dispositivo
+- Branch: `main` / `(root)`
