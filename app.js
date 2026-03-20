@@ -7,10 +7,6 @@ const dueDateInput = document.getElementById("dueDate");
 const recurrenceInput = document.getElementById("recurrence");
 const submitBtn = document.getElementById("submit-btn");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
-const exportBackupBtn = document.getElementById("export-backup-btn");
-const importBackupBtn = document.getElementById("import-backup-btn");
-const importBackupFileInput = document.getElementById("import-backup-file");
-const backupStatusEl = document.getElementById("backup-status");
 
 const openListEl = document.getElementById("task-list-open");
 const doneListEl = document.getElementById("task-list-done");
@@ -33,6 +29,41 @@ let sameDateMetaMap = {};
 let monthCursor = new Date();
 monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
 
+function captureTaskPositions() {
+  const map = new Map();
+  document.querySelectorAll(".task-item[data-id]").forEach((el) => {
+    map.set(el.dataset.id, el.getBoundingClientRect());
+  });
+  return map;
+}
+
+function animateTaskReorder(beforePositions) {
+  if (!beforePositions || beforePositions.size === 0) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  document.querySelectorAll(".task-item[data-id]").forEach((el) => {
+    const oldBox = beforePositions.get(el.dataset.id);
+    if (!oldBox) return;
+
+    const newBox = el.getBoundingClientRect();
+    const dx = oldBox.left - newBox.left;
+    const dy = oldBox.top - newBox.top;
+
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+
+    el.animate(
+      [
+        { transform: `translate(${dx}px, ${dy}px)` },
+        { transform: "translate(0, 0)" },
+      ],
+      {
+        duration: 320,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+    );
+  });
+}
+
 function setFormOpen(open) {
   formOpen = open;
   form.hidden = !open;
@@ -52,50 +83,6 @@ monthPrevBtn.addEventListener("click", () => {
 monthNextBtn.addEventListener("click", () => {
   monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
   renderMonthlyPanel();
-});
-
-exportBackupBtn.addEventListener("click", () => {
-  const payload = {
-    exportedAt: new Date().toISOString(),
-    storageKey: STORAGE_KEY,
-    tasks,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  a.href = url;
-  a.download = `atividades-backup-${stamp}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  backupStatusEl.textContent = "Backup exportado. Agora suba este arquivo na sua nuvem.";
-});
-
-importBackupBtn.addEventListener("click", () => {
-  importBackupFileInput.click();
-});
-
-importBackupFileInput.addEventListener("change", async () => {
-  const file = importBackupFileInput.files?.[0];
-  if (!file) return;
-
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    const importedTasks = Array.isArray(parsed) ? parsed : parsed.tasks;
-    if (!Array.isArray(importedTasks)) {
-      throw new Error("Formato de backup invalido.");
-    }
-
-    tasks = normalizeTasks(importedTasks);
-    persist();
-    render();
-    backupStatusEl.textContent = "Backup importado com sucesso.";
-  } catch {
-    backupStatusEl.textContent = "Falha ao importar backup. Verifique se o arquivo JSON e valido.";
-  } finally {
-    importBackupFileInput.value = "";
-  }
 });
 
 render();
@@ -717,6 +704,8 @@ function renderMonthlyPanel() {
 }
 
 function render() {
+  const beforePositions = captureTaskPositions();
+
   openListEl.innerHTML = "";
   doneListEl.innerHTML = "";
   deletedListEl.innerHTML = "";
@@ -780,6 +769,7 @@ function render() {
 
   statsEl.textContent = `${openTasks.length} em aberto - ${doneTasks.length} concluidas - ${deletedTasks.length} excluidas`;
   renderMonthlyPanel();
+  animateTaskReorder(beforePositions);
 }
 
 function formatDateWithWeekday(iso) {

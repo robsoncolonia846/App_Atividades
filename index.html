@@ -16,7 +16,9 @@
       </header>
 
       <section class="card form-card">
-        <button id="toggle-form-btn" type="button" class="toggle-form-btn">Nova atividade</button>
+        <div class="top-actions">
+          <button id="toggle-form-btn" type="button" class="toggle-form-btn">Nova atividade</button>
+        </div>
 
         <form id="task-form" hidden>
           <label>
@@ -46,17 +48,6 @@
             <button id="cancel-edit-btn" type="button" class="btn-cancel" hidden>Cancelar edicao</button>
           </div>
         </form>
-      </section>
-
-      <section class="card backup-card">
-        <h2>Backup</h2>
-        <p class="backup-note">Exporte o JSON e guarde na nuvem (Drive/OneDrive/Dropbox) para seguranca.</p>
-        <div class="backup-actions">
-          <button id="export-backup-btn" type="button">Exportar backup JSON</button>
-          <button id="import-backup-btn" type="button">Importar backup JSON</button>
-          <input id="import-backup-file" type="file" accept="application/json" hidden />
-        </div>
-        <small id="backup-status"></small>
       </section>
 
       <section class="card month-card">
