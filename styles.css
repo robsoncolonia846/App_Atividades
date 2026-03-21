@@ -244,13 +244,14 @@ form button[type="submit"]:hover {
   align-items: center;
   justify-content: center;
   min-width: 16px;
-  height: 14px;
+  min-height: 14px;
   padding: 0 4px;
   border-radius: 7px;
   background: #0d9488;
   color: #ffffff;
   font-size: 0.62rem;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .day-dots small {
@@ -269,10 +270,22 @@ form button[type="submit"]:hover {
   margin-top: 12px;
 }
 
+.section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
 .section-title {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 0.95rem;
   color: #374151;
+}
+
+.section-hint {
+  color: #6b7280;
+  font-size: 0.78rem;
 }
 
 .done-section {
@@ -331,6 +344,42 @@ form button[type="submit"]:hover {
   will-change: transform;
 }
 
+.open-subgroup-list .task-item {
+  cursor: grab;
+}
+
+.open-subgroup-list .task-item:active {
+  cursor: grabbing;
+}
+
+.task-item.is-dragging {
+  opacity: 0.45;
+}
+
+.task-item.drag-over-before,
+.task-item.drag-over-after {
+  position: relative;
+}
+
+.task-item.drag-over-before::before,
+.task-item.drag-over-after::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.task-item.drag-over-before::before {
+  top: -2px;
+}
+
+.task-item.drag-over-after::after {
+  bottom: -2px;
+}
+
 .task-item.done {
   opacity: 0.72;
 }
@@ -366,8 +415,22 @@ form button[type="submit"]:hover {
   font-size: 1rem;
 }
 
-.task-number {
-  color: #0f766e;
+.task-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-title-row .btn-edit {
+  border: none;
+  border-radius: 8px;
+  padding: 3px 7px;
+  font-size: 0.75rem;
+  color: #fff;
+  background: #1d4ed8;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .meta-line {
@@ -376,6 +439,13 @@ form button[type="submit"]:hover {
   align-items: center;
   gap: 6px;
   margin-top: 3px;
+}
+
+.task-item .time-picker-inline.show,
+.task-item .date-picker-inline.show {
+  display: block;
+  flex-basis: 100%;
+  margin-top: 6px;
 }
 
 .meta-date {
@@ -387,6 +457,11 @@ form button[type="submit"]:hover {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.meta-extra .alarm-status {
+  color: #c2410c;
+  font-weight: 700;
 }
 
 .meta-line button {
@@ -413,20 +488,27 @@ form button[type="submit"]:hover {
   padding: 4px 6px;
 }
 
-.date-picker-inline.show {
-  display: inline-block;
+.time-picker-inline {
+  display: none;
+  width: 110px;
+  padding: 4px 6px;
 }
 
 .meta-line .btn-postpone-minus {
   background: #0891b2;
 }
 
-.meta-line .btn-postpone {
-  background: #7c3aed;
+.meta-line .btn-alarm {
+  background: #ea580c;
 }
 
-.meta-line .btn-edit {
-  background: #1d4ed8;
+.meta-line .btn-alarm.active {
+  background: #c2410c;
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.18);
+}
+
+.meta-line .btn-postpone {
+  background: #7c3aed;
 }
 
 .meta-line .danger {

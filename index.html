@@ -81,7 +81,10 @@
           <small id="stats"></small>
         </div>
         <section class="task-section">
-          <h3 class="section-title">Em aberto</h3>
+          <div class="section-heading">
+            <h3 class="section-title">Em aberto</h3>
+            <small class="section-hint">Arraste uma atividade para reorganizar dentro da mesma data.</small>
+          </div>
           <ul id="task-list-open"></ul>
         </section>
         <section class="task-section done-section">
@@ -99,13 +102,17 @@
       <li class="task-item">
         <button class="btn-toggle" title="Concluir ou reativar" aria-label="Concluir ou reativar" type="button"></button>
         <div class="task-info">
-          <h3></h3>
+          <div class="task-title-row">
+            <h3></h3>
+            <button class="btn-edit" title="Editar atividade" type="button">Editar</button>
+          </div>
           <div class="meta-line">
             <span class="meta-date"></span>
             <button class="btn-postpone-minus" title="Jogar para tras" type="button">-1 dia</button>
             <button class="btn-postpone" title="Jogar para frente" type="button">+1 dia</button>
             <button class="btn-calendar" title="Escolher data" type="button">Data</button>
-            <button class="btn-edit" title="Editar atividade" type="button">Editar</button>
+            <button class="btn-alarm" title="Definir despertador" type="button">Relogio</button>
+            <input class="time-picker-inline" type="time" />
             <button class="btn-delete danger" title="Excluir" type="button">Excluir</button>
             <button class="btn-move-up" title="Subir na data" type="button">↑</button>
             <button class="btn-move-down" title="Descer na data" type="button">↓</button>

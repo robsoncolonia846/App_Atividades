@@ -34,10 +34,11 @@ dueDateInput.value = todayIso();
 let tasks = loadTasks();
 let editingTaskId = null;
 let formOpen = false;
-let taskNumberMap = {};
 let sameDateMetaMap = {};
 let monthCursor = new Date();
 monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
+let dragState = null;
+let alarmTimer = null;
 
 let syncedFileHandle = null;
 let fileSyncTimer = null;
@@ -378,6 +379,7 @@ form.addEventListener("submit", (event) => {
         recurrence: payload.recurrence,
         deleted: false,
         deletedAt: null,
+        alarmTriggeredAt: null,
         nextDueDate: task.completed && payload.recurrence !== "none"
           ? task.nextDueDate || advanceDate(payload.dueDate, payload.recurrence)
           : null,
@@ -394,6 +396,8 @@ form.addEventListener("submit", (event) => {
       nextDueDate: null,
       deleted: false,
       deletedAt: null,
+      alarmTime: "",
+      alarmTriggeredAt: null,
       rank: Date.now(),
       createdAt: Date.now(),
     });
@@ -432,6 +436,8 @@ function normalizeTasks(list) {
     nextDueDate: task.nextDueDate || null,
     deleted: Boolean(task.deleted),
     deletedAt: task.deletedAt || null,
+    alarmTime: task.alarmTime || "",
+    alarmTriggeredAt: task.alarmTriggeredAt || null,
     rank: task.rank ?? task.createdAt ?? Date.now(),
     createdAt: task.createdAt ?? Date.now(),
   }));
@@ -510,16 +516,6 @@ function compareByDateThenRank(a, b) {
   return String(a.id).localeCompare(String(b.id));
 }
 
-function createTaskNumberMap(activeTasks) {
-  const ordered = [...activeTasks].sort(compareByDateThenRank);
-
-  const map = {};
-  ordered.forEach((task, index) => {
-    map[task.id] = index + 1;
-  });
-  return map;
-}
-
 function createSameDateMetaMap(activeTasks) {
   const grouped = {};
   for (const task of activeTasks) {
@@ -562,6 +558,138 @@ function advanceDate(isoDate, recurrence) {
   return d.toISOString().slice(0, 10);
 }
 
+function formatAlarmLabel(alarmTime) {
+  return alarmTime ? `Despertador: ${alarmTime}` : "Despertador: desligado";
+}
+
+function buildMetaExtraHtml(task, mode) {
+  const statusText = mode === "deleted" ? "Status: excluida" : task.completed ? "Status: concluida" : "Status: ativa";
+  const alarmText = formatAlarmLabel(task.alarmTime);
+  const alarmHtml = task.alarmTime
+    ? `<span class="alarm-status">${alarmText}</span>`
+    : alarmText;
+
+  return `Recorrencia: ${recurrenceLabel(task.recurrence)} | ${alarmHtml} | ${statusText}`;
+}
+
+function getAlarmDateTime(task) {
+  if (!task.alarmTime) return null;
+  const dateKey = getTaskCalendarDate(task);
+  const alarmDate = new Date(`${dateKey}T${task.alarmTime}:00`);
+  return Number.isNaN(alarmDate.getTime()) ? null : alarmDate;
+}
+
+function playAlarmSound() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  try {
+    const context = new AudioContextClass();
+    const now = context.currentTime;
+    const envelope = [
+      { frequency: 880, start: now, duration: 0.16 },
+      { frequency: 660, start: now + 0.22, duration: 0.16 },
+      { frequency: 880, start: now + 0.44, duration: 0.22 },
+    ];
+
+    envelope.forEach((tone) => {
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(tone.frequency, tone.start);
+      gainNode.gain.setValueAtTime(0.0001, tone.start);
+      gainNode.gain.exponentialRampToValueAtTime(0.18, tone.start + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, tone.start + tone.duration);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(tone.start);
+      oscillator.stop(tone.start + tone.duration);
+    });
+
+    window.setTimeout(() => {
+      void context.close();
+    }, 1200);
+  } catch {
+    // Some browsers may block audio until user interaction.
+  }
+}
+
+function showAlarm(task) {
+  const alarmDate = getAlarmDateTime(task);
+  const timeLabel = alarmDate
+    ? alarmDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    : task.alarmTime;
+  const message = `${task.title} - ${formatDateWithWeekday(getTaskCalendarDate(task))} as ${timeLabel}`;
+
+  playAlarmSound();
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("Lembrete de atividade", { body: message });
+  }
+
+  window.alert(`Lembrete: ${message}`);
+}
+
+function checkTaskAlarms() {
+  const now = Date.now();
+  let changed = false;
+
+  tasks = tasks.map((task) => {
+    if (task.deleted || task.completed || !task.alarmTime) return task;
+
+    const alarmDate = getAlarmDateTime(task);
+    if (!alarmDate) return task;
+
+    const triggerAt = alarmDate.getTime();
+    if (triggerAt > now || task.alarmTriggeredAt === triggerAt) return task;
+
+    showAlarm(task);
+    changed = true;
+    return {
+      ...task,
+      alarmTriggeredAt: triggerAt,
+    };
+  });
+
+  if (changed) {
+    persist();
+    render();
+  }
+}
+
+function startAlarmWatcher() {
+  if (alarmTimer) clearInterval(alarmTimer);
+  alarmTimer = window.setInterval(checkTaskAlarms, 30000);
+  checkTaskAlarms();
+}
+
+async function requestNotificationAccess() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted" || Notification.permission === "denied") return;
+
+  try {
+    await Notification.requestPermission();
+  } catch {
+    // Alert fallback remains available.
+  }
+}
+
+function updateTaskAlarm(id, alarmTime) {
+  tasks = tasks.map((task) => {
+    if (task.id !== id || task.deleted) return task;
+    return {
+      ...task,
+      alarmTime,
+      alarmTriggeredAt: null,
+    };
+  });
+
+  persist();
+  render();
+}
+
 function postpone(id, days = 1) {
   tasks = tasks.map((t) => {
     if (t.id !== id || t.deleted) return t;
@@ -577,6 +705,7 @@ function postpone(id, days = 1) {
       return {
         ...t,
         nextDueDate: shifted,
+        alarmTriggeredAt: null,
       };
     }
 
@@ -586,6 +715,7 @@ function postpone(id, days = 1) {
       completed: false,
       completedAt: null,
       nextDueDate: null,
+      alarmTriggeredAt: null,
     };
   });
   persist();
@@ -600,6 +730,7 @@ function updateTaskDate(id, newDate) {
       return {
         ...t,
         nextDueDate: newDate,
+        alarmTriggeredAt: null,
       };
     }
 
@@ -607,6 +738,7 @@ function updateTaskDate(id, newDate) {
       ...t,
       dueDate: newDate,
       nextDueDate: null,
+      alarmTriggeredAt: null,
     };
   });
 
@@ -622,6 +754,7 @@ function completeTask(task) {
       completed: false,
       completedAt: null,
       nextDueDate: null,
+      alarmTriggeredAt: null,
     };
   }
 
@@ -630,6 +763,7 @@ function completeTask(task) {
     completed: true,
     completedAt: Date.now(),
     nextDueDate: null,
+    alarmTriggeredAt: null,
   };
 }
 
@@ -641,6 +775,7 @@ function reopenTask(task) {
       completed: false,
       completedAt: null,
       nextDueDate: null,
+      alarmTriggeredAt: null,
     };
   }
 
@@ -649,6 +784,7 @@ function reopenTask(task) {
     completed: false,
     completedAt: null,
     nextDueDate: null,
+    alarmTriggeredAt: null,
   };
 }
 
@@ -778,6 +914,145 @@ function moveTaskWithinDate(id, direction) {
   render();
 }
 
+function setTaskRank(id, nextRank) {
+  tasks = tasks.map((task) => {
+    if (task.id !== id) return task;
+    return { ...task, rank: nextRank };
+  });
+}
+
+function getRankBetween(previousTask, nextTask) {
+  const gap = 1024;
+
+  if (!previousTask && !nextTask) {
+    return Date.now();
+  }
+
+  if (!previousTask) {
+    const nextRank = nextTask.rank ?? nextTask.createdAt ?? 0;
+    return nextRank - gap;
+  }
+
+  if (!nextTask) {
+    const previousRank = previousTask.rank ?? previousTask.createdAt ?? 0;
+    return previousRank + gap;
+  }
+
+  const previousRank = previousTask.rank ?? previousTask.createdAt ?? 0;
+  const nextRank = nextTask.rank ?? nextTask.createdAt ?? 0;
+  const middleRank = previousRank + (nextRank - previousRank) / 2;
+
+  if (Number.isFinite(middleRank) && middleRank !== previousRank && middleRank !== nextRank) {
+    return middleRank;
+  }
+
+  return previousRank + gap / 2;
+}
+
+function normalizeRanksForDate(dateKey) {
+  const sameDate = tasks
+    .filter((task) => !task.deleted && getTaskCalendarDate(task) === dateKey)
+    .sort(compareByDateThenRank);
+
+  tasks = tasks.map((task) => {
+    const index = sameDate.findIndex((item) => item.id === task.id);
+    if (index === -1) return task;
+    return {
+      ...task,
+      rank: (index + 1) * 1024,
+    };
+  });
+}
+
+function moveTaskByDrag(draggedId, targetId, placement) {
+  if (!draggedId || !targetId || draggedId === targetId) return;
+
+  const draggedTask = tasks.find((task) => task.id === draggedId);
+  const targetTask = tasks.find((task) => task.id === targetId);
+  if (!draggedTask || !targetTask || draggedTask.deleted || targetTask.deleted) return;
+
+  const dateKey = getTaskCalendarDate(draggedTask);
+  if (dateKey !== getTaskCalendarDate(targetTask)) return;
+
+  const sameDate = tasks
+    .filter((task) => !task.deleted && getTaskCalendarDate(task) === dateKey)
+    .sort(compareByDateThenRank);
+
+  const draggedIndex = sameDate.findIndex((task) => task.id === draggedId);
+  const targetIndex = sameDate.findIndex((task) => task.id === targetId);
+  if (draggedIndex < 0 || targetIndex < 0) return;
+
+  const ordered = sameDate.filter((task) => task.id !== draggedId);
+  const rawInsertIndex = placement === "before" ? targetIndex : targetIndex + 1;
+  const insertIndex = Math.max(0, Math.min(rawInsertIndex > draggedIndex ? rawInsertIndex - 1 : rawInsertIndex, ordered.length));
+  ordered.splice(insertIndex, 0, draggedTask);
+
+  const movedIndex = ordered.findIndex((task) => task.id === draggedId);
+  const previousTask = ordered[movedIndex - 1] || null;
+  const nextTask = ordered[movedIndex + 1] || null;
+
+  setTaskRank(draggedId, getRankBetween(previousTask, nextTask));
+  normalizeRanksForDate(dateKey);
+  persist();
+  render();
+}
+
+function clearDragIndicators() {
+  document.querySelectorAll(".task-item.drag-over-before, .task-item.drag-over-after, .task-item.is-dragging").forEach((el) => {
+    el.classList.remove("drag-over-before", "drag-over-after", "is-dragging");
+  });
+}
+
+function getDragPlacement(node, event) {
+  const rect = node.getBoundingClientRect();
+  const midpoint = rect.top + rect.height / 2;
+  return event.clientY < midpoint ? "before" : "after";
+}
+
+function attachDragHandlers(node, task, mode) {
+  if (mode !== "open") return;
+
+  node.draggable = true;
+
+  node.addEventListener("dragstart", (event) => {
+    dragState = { id: task.id };
+    node.classList.add("is-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", task.id);
+    }
+  });
+
+  node.addEventListener("dragover", (event) => {
+    if (!dragState || dragState.id === task.id) return;
+    const draggedTask = tasks.find((item) => item.id === dragState.id);
+    if (!draggedTask || getTaskCalendarDate(draggedTask) !== getTaskCalendarDate(task)) return;
+
+    event.preventDefault();
+    const placement = getDragPlacement(node, event);
+    node.classList.toggle("drag-over-before", placement === "before");
+    node.classList.toggle("drag-over-after", placement === "after");
+  });
+
+  node.addEventListener("dragleave", (event) => {
+    const related = event.relatedTarget;
+    if (related instanceof Node && node.contains(related)) return;
+    node.classList.remove("drag-over-before", "drag-over-after");
+  });
+
+  node.addEventListener("drop", (event) => {
+    if (!dragState || dragState.id === task.id) return;
+    const placement = getDragPlacement(node, event);
+    event.preventDefault();
+    moveTaskByDrag(dragState.id, task.id, placement);
+  });
+
+  node.addEventListener("dragend", () => {
+    dragState = null;
+    clearDragIndicators();
+  });
+}
+
 function purgeTask(id) {
   tasks = tasks.filter((task) => task.id !== id);
   persist();
@@ -798,6 +1073,8 @@ function renderTask(task, mode) {
   const toggleBtn = node.querySelector(".btn-toggle");
   const datePicker = node.querySelector(".date-picker-inline");
   const dateBtn = node.querySelector(".btn-calendar");
+  const alarmBtn = node.querySelector(".btn-alarm");
+  const timePicker = node.querySelector(".time-picker-inline");
   const minusBtn = node.querySelector(".btn-postpone-minus");
   const plusBtn = node.querySelector(".btn-postpone");
   const editBtn = node.querySelector(".btn-edit");
@@ -805,39 +1082,34 @@ function renderTask(task, mode) {
   const moveUpBtn = node.querySelector(".btn-move-up");
   const moveDownBtn = node.querySelector(".btn-move-down");
   const restoreBtn = node.querySelector(".btn-restore");
+  const hasAlarm = Boolean(task.alarmTime);
 
   toggleBtn.classList.toggle("checked", task.completed);
+  alarmBtn.classList.toggle("active", hasAlarm);
+  alarmBtn.textContent = hasAlarm ? `Relogio ${task.alarmTime}` : "Relogio";
 
   const displayDate = task.completed && task.nextDueDate
     ? `${formatDateWithWeekday(task.dueDate)} -> ${formatDateWithWeekday(task.nextDueDate)}`
     : formatDateWithWeekday(task.dueDate);
   const editableDate = task.completed && task.recurrence !== "none" && task.nextDueDate ? task.nextDueDate : task.dueDate;
 
-  const number = taskNumberMap[task.id];
   const h3 = node.querySelector("h3");
   h3.textContent = "";
-  if (number) {
-    const numberSpan = document.createElement("span");
-    numberSpan.className = "task-number";
-    numberSpan.textContent = `#${number} `;
-    h3.appendChild(numberSpan);
-  }
   h3.appendChild(document.createTextNode(task.title));
   node.querySelector(".meta-date").textContent = `Data: ${displayDate}`;
 
-  const extra = [
-    `Recorrencia: ${recurrenceLabel(task.recurrence)}`,
-    mode === "deleted" ? "Status: excluida" : task.completed ? "Status: concluida" : "Status: ativa",
-  ];
-  node.querySelector(".meta-extra").textContent = extra.join(" | ");
+  node.querySelector(".meta-extra").innerHTML = buildMetaExtraHtml(task, mode);
 
   datePicker.value = editableDate;
+  timePicker.value = task.alarmTime || "";
 
   if (mode === "deleted") {
     toggleBtn.classList.add("is-hidden");
     minusBtn.classList.add("is-hidden");
     plusBtn.classList.add("is-hidden");
     dateBtn.classList.add("is-hidden");
+    alarmBtn.classList.add("is-hidden");
+    timePicker.classList.add("is-hidden");
     datePicker.classList.add("is-hidden");
     editBtn.classList.add("is-hidden");
     moveUpBtn.classList.add("is-hidden");
@@ -847,16 +1119,8 @@ function renderTask(task, mode) {
     deleteBtn.addEventListener("click", () => purgeTask(task.id));
   } else {
     restoreBtn.classList.add("is-hidden");
-    const sameDateMeta = sameDateMetaMap[task.id] || { index: 0, total: 1 };
-    if (sameDateMeta.total <= 1) {
-      moveUpBtn.classList.add("is-hidden");
-      moveDownBtn.classList.add("is-hidden");
-    } else {
-      moveUpBtn.disabled = sameDateMeta.index === 0;
-      moveDownBtn.disabled = sameDateMeta.index === sameDateMeta.total - 1;
-      moveUpBtn.addEventListener("click", () => moveTaskWithinDate(task.id, -1));
-      moveDownBtn.addEventListener("click", () => moveTaskWithinDate(task.id, 1));
-    }
+    moveUpBtn.classList.add("is-hidden");
+    moveDownBtn.classList.add("is-hidden");
 
     toggleBtn.addEventListener("click", () => toggleComplete(task.id));
     dateBtn.addEventListener("click", () => {
@@ -879,6 +1143,28 @@ function renderTask(task, mode) {
       datePicker.classList.remove("show");
     });
 
+    alarmBtn.addEventListener("click", () => {
+      timePicker.classList.add("show");
+      requestAnimationFrame(() => {
+        try {
+          timePicker.showPicker();
+        } catch {
+          timePicker.focus();
+          timePicker.click();
+        }
+      });
+      void requestNotificationAccess();
+    });
+
+    timePicker.addEventListener("change", () => {
+      updateTaskAlarm(task.id, timePicker.value || "");
+      timePicker.classList.remove("show");
+    });
+
+    timePicker.addEventListener("blur", () => {
+      timePicker.classList.remove("show");
+    });
+
     minusBtn.addEventListener("click", () => postpone(task.id, -1));
     plusBtn.addEventListener("click", () => postpone(task.id, 1));
     editBtn.addEventListener("click", () => startEdit(task.id));
@@ -886,6 +1172,7 @@ function renderTask(task, mode) {
   }
 
   restoreBtn.addEventListener("click", () => reuseTask(task.id));
+  attachDragHandlers(node, task, mode);
 
   return node;
 }
@@ -907,13 +1194,7 @@ function buildDateCountMap(monthDate) {
     const dateKey = getTaskCalendarDate(task);
     const [ty, tm] = dateKey.split("-").map(Number);
     if (ty !== y || ((tm || 1) - 1) !== m) continue;
-    if (!counts[dateKey]) counts[dateKey] = [];
-    const number = taskNumberMap[task.id];
-    if (number) counts[dateKey].push(number);
-  }
-
-  for (const key of Object.keys(counts)) {
-    counts[key].sort((a, b) => a - b);
+    counts[dateKey] = (counts[dateKey] || 0) + 1;
   }
 
   return counts;
@@ -956,22 +1237,14 @@ function renderMonthlyPanel() {
     cell.appendChild(num);
 
     const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const numbers = dateCount[dateKey] || [];
-    if (numbers.length > 0) {
+    const count = dateCount[dateKey] || 0;
+    if (count > 0) {
       const dots = document.createElement("div");
       dots.className = "day-dots";
-      const shown = Math.min(numbers.length, 3);
-      for (let i = 0; i < shown; i += 1) {
-        const tag = document.createElement("span");
-        tag.className = "day-tag";
-        tag.textContent = `#${numbers[i]}`;
-        dots.appendChild(tag);
-      }
-      if (numbers.length > shown) {
-        const more = document.createElement("small");
-        more.textContent = `+${numbers.length - shown}`;
-        dots.appendChild(more);
-      }
+      const tag = document.createElement("span");
+      tag.className = "day-tag";
+      tag.textContent = count === 1 ? "1 tarefa" : `${count} tarefas`;
+      dots.appendChild(tag);
       cell.appendChild(dots);
     }
 
@@ -987,7 +1260,6 @@ function render() {
   deletedListEl.innerHTML = "";
 
   const activeTasks = tasks.filter((t) => !t.deleted);
-  taskNumberMap = createTaskNumberMap(activeTasks);
   sameDateMetaMap = createSameDateMetaMap(activeTasks);
   const openTasks = sortOpenTasks(activeTasks.filter((t) => !t.completed));
   const doneTasks = sortDoneTasks(activeTasks.filter((t) => t.completed));
@@ -1058,6 +1330,7 @@ function formatDateWithWeekday(iso) {
 setStorageSource("Base: local");
 setSyncStatus("Dados salvos neste navegador (modo local).");
 render();
+startAlarmWatcher();
 if (ENABLE_FILE_SYNC) {
   void tryAutoReconnectSavedHandle();
 }
