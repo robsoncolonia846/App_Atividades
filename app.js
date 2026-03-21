@@ -486,6 +486,7 @@ function splitOpenTasks(openTasks) {
   const endThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const buckets = {
+    overdue: [],
     today: [],
     thisWeek: [],
     nextWeek: [],
@@ -497,7 +498,9 @@ function splitOpenTasks(openTasks) {
     const [y, m, d] = task.dueDate.split("-").map(Number);
     const due = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
 
-    if (
+    if (due < today) {
+      buckets.overdue.push(task);
+    } else if (
       due.getFullYear() === today.getFullYear() &&
       due.getMonth() === today.getMonth() &&
       due.getDate() === today.getDate()
@@ -1390,6 +1393,7 @@ function render() {
   } else {
     const buckets = splitOpenTasks(openTasks);
     const groups = [
+      { title: "Atrasado", items: buckets.overdue },
       { title: "Hoje", items: buckets.today },
       { title: "Esta semana (Até Domingo)", items: buckets.thisWeek },
       { title: "Proxima semana", items: buckets.nextWeek },
@@ -1436,7 +1440,7 @@ function render() {
     }
   }
 
-  statsEl.textContent = `${openTasks.length} em aberto - ${doneTasks.length} concluidas - ${deletedTasks.length} excluidas`;
+  statsEl.textContent = "";
   renderMonthlyPanel();
   animateTaskReorder(beforePositions);
 }
@@ -1449,7 +1453,7 @@ function formatDateWithWeekday(iso) {
 }
 
 setStorageSource("Base: local");
-setSyncStatus("Dados salvos neste navegador (modo local).");
+setSyncStatus("");
 updateNotificationStatus();
 render();
 startAlarmWatcher();
