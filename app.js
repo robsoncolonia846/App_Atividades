@@ -11,6 +11,8 @@ const syncJsonBtn = document.getElementById("sync-json-btn");
 const storageSourceEl = document.getElementById("storage-source");
 const syncStatusEl = document.getElementById("sync-status");
 const jsonFileInputEl = document.getElementById("json-file-input");
+const notificationStatusEl = document.getElementById("notification-status");
+const testAlarmBtn = document.getElementById("test-alarm-btn");
 
 const titleInput = document.getElementById("title");
 const dueDateInput = document.getElementById("dueDate");
@@ -50,6 +52,21 @@ function setSyncStatus(text) {
 
 function setStorageSource(text) {
   storageSourceEl.textContent = text;
+}
+
+function updateNotificationStatus() {
+  if (!notificationStatusEl) return;
+  if (!("Notification" in window)) {
+    notificationStatusEl.textContent = "Notificacoes: navegador nao suporta";
+    return;
+  }
+
+  const labels = {
+    granted: "Notificacoes: permitidas",
+    denied: "Notificacoes: bloqueadas",
+    default: "Notificacoes: pendentes",
+  };
+  notificationStatusEl.textContent = labels[Notification.permission] || "Notificacoes: pendentes";
 }
 
 function supportsFileSync() {
@@ -681,6 +698,7 @@ async function requestNotificationAccess() {
   } catch {
     // Alert fallback remains available.
   }
+  updateNotificationStatus();
 }
 
 function updateTaskAlarm(id, alarmTime) {
@@ -695,6 +713,26 @@ function updateTaskAlarm(id, alarmTime) {
 
   persist();
   render();
+}
+
+function triggerTestAlarm() {
+  playAlarmSound();
+
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification("Teste de alerta", {
+      body: "Se voce recebeu isso, as notificacoes do app estao funcionando neste navegador.",
+    });
+  }
+
+  window.alert("Teste de alerta disparado.");
+}
+
+if (testAlarmBtn) {
+  testAlarmBtn.addEventListener("click", async () => {
+    await requestNotificationAccess();
+    updateNotificationStatus();
+    triggerTestAlarm();
+  });
 }
 
 function postpone(id, days = 1) {
@@ -1412,6 +1450,7 @@ function formatDateWithWeekday(iso) {
 
 setStorageSource("Base: local");
 setSyncStatus("Dados salvos neste navegador (modo local).");
+updateNotificationStatus();
 render();
 startAlarmWatcher();
 if (ENABLE_FILE_SYNC) {
