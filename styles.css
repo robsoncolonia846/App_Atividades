@@ -346,6 +346,9 @@ form button[type="submit"]:hover {
 
 .open-subgroup-list .task-item {
   cursor: grab;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .open-subgroup-list .task-item:active {

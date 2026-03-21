@@ -469,6 +469,7 @@ function splitOpenTasks(openTasks) {
   const endThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const buckets = {
+    today: [],
     thisWeek: [],
     nextWeek: [],
     thisMonth: [],
@@ -479,7 +480,13 @@ function splitOpenTasks(openTasks) {
     const [y, m, d] = task.dueDate.split("-").map(Number);
     const due = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
 
-    if (due <= endThisWeek) {
+    if (
+      due.getFullYear() === today.getFullYear() &&
+      due.getMonth() === today.getMonth() &&
+      due.getDate() === today.getDate()
+    ) {
+      buckets.today.push(task);
+    } else if (due <= endThisWeek) {
       buckets.thisWeek.push(task);
     } else if (due <= endNextWeek) {
       buckets.nextWeek.push(task);
@@ -1003,6 +1010,25 @@ function clearDragIndicators() {
   });
 }
 
+function updateDragTarget(draggedId, node, clientY) {
+  if (!draggedId || !node || node.dataset.id === draggedId) return false;
+
+  const draggedTask = tasks.find((item) => item.id === draggedId);
+  const targetTask = tasks.find((item) => item.id === node.dataset.id);
+  if (!draggedTask || !targetTask) return false;
+  if (getTaskCalendarDate(draggedTask) !== getTaskCalendarDate(targetTask)) return false;
+
+  const placement = getDragPlacement(node, { clientY });
+  clearDragIndicators();
+  const draggedNode = document.querySelector(`.task-item[data-id="${draggedId}"]`);
+  if (draggedNode) draggedNode.classList.add("is-dragging");
+  node.classList.toggle("drag-over-before", placement === "before");
+  node.classList.toggle("drag-over-after", placement === "after");
+  dragState.targetId = targetTask.id;
+  dragState.placement = placement;
+  return true;
+}
+
 function getDragPlacement(node, event) {
   const rect = node.getBoundingClientRect();
   const midpoint = rect.top + rect.height / 2;
@@ -1025,13 +1051,8 @@ function attachDragHandlers(node, task, mode) {
 
   node.addEventListener("dragover", (event) => {
     if (!dragState || dragState.id === task.id) return;
-    const draggedTask = tasks.find((item) => item.id === dragState.id);
-    if (!draggedTask || getTaskCalendarDate(draggedTask) !== getTaskCalendarDate(task)) return;
-
     event.preventDefault();
-    const placement = getDragPlacement(node, event);
-    node.classList.toggle("drag-over-before", placement === "before");
-    node.classList.toggle("drag-over-after", placement === "after");
+    updateDragTarget(dragState.id, node, event.clientY);
   });
 
   node.addEventListener("dragleave", (event) => {
@@ -1042,15 +1063,76 @@ function attachDragHandlers(node, task, mode) {
 
   node.addEventListener("drop", (event) => {
     if (!dragState || dragState.id === task.id) return;
-    const placement = getDragPlacement(node, event);
     event.preventDefault();
-    moveTaskByDrag(dragState.id, task.id, placement);
+    const targetId = dragState.targetId || task.id;
+    const placement = dragState.placement || getDragPlacement(node, event);
+    moveTaskByDrag(dragState.id, targetId, placement);
   });
 
   node.addEventListener("dragend", () => {
     dragState = null;
     clearDragIndicators();
   });
+
+  node.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    if (event.target.closest("button, input, select, label")) return;
+
+    dragState = {
+      id: task.id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      targetId: null,
+      placement: null,
+    };
+  });
+
+  node.addEventListener("pointermove", (event) => {
+    if (!dragState || dragState.pointerId !== event.pointerId || dragState.id !== task.id) return;
+
+    const movedX = Math.abs(event.clientX - dragState.startX);
+    const movedY = Math.abs(event.clientY - dragState.startY);
+
+    if (!dragState.dragging) {
+      if (Math.max(movedX, movedY) < 10) return;
+      dragState.dragging = true;
+      node.classList.add("is-dragging");
+    }
+
+    event.preventDefault();
+    const targetEl = document.elementFromPoint(event.clientX, event.clientY)?.closest(".task-item[data-id]");
+    if (!targetEl) {
+      clearDragIndicators();
+      node.classList.add("is-dragging");
+      dragState.targetId = null;
+      dragState.placement = null;
+      return;
+    }
+
+    const updated = updateDragTarget(task.id, targetEl, event.clientY);
+    if (!updated) {
+      clearDragIndicators();
+      node.classList.add("is-dragging");
+      dragState.targetId = null;
+      dragState.placement = null;
+    }
+  });
+
+  function finishPointerDrag(event) {
+    if (!dragState || dragState.pointerId !== event.pointerId || dragState.id !== task.id) return;
+
+    const { dragging, targetId, placement } = dragState;
+    dragState = null;
+    clearDragIndicators();
+
+    if (!dragging || !targetId || !placement) return;
+    moveTaskByDrag(task.id, targetId, placement);
+  }
+
+  node.addEventListener("pointerup", finishPointerDrag);
+  node.addEventListener("pointercancel", finishPointerDrag);
 }
 
 function purgeTask(id) {
@@ -1270,6 +1352,7 @@ function render() {
   } else {
     const buckets = splitOpenTasks(openTasks);
     const groups = [
+      { title: "Hoje", items: buckets.today },
       { title: "Esta semana (Até Domingo)", items: buckets.thisWeek },
       { title: "Proxima semana", items: buckets.nextWeek },
       { title: "Este mes", items: buckets.thisMonth },
