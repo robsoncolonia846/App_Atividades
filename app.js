@@ -1325,7 +1325,7 @@ function renderMonthlyPanel() {
       dots.className = "day-dots";
       const tag = document.createElement("span");
       tag.className = "day-tag";
-      tag.textContent = count === 1 ? "1 tarefa" : `${count} tarefas`;
+      tag.textContent = String(count);
       dots.appendChild(tag);
       cell.appendChild(dots);
     }

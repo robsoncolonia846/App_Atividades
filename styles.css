@@ -153,7 +153,7 @@ form button[type="submit"]:hover {
 }
 
 .month-card {
-  padding: 12px;
+  padding: 10px;
 }
 
 .month-head {
@@ -210,11 +210,12 @@ form button[type="submit"]:hover {
 }
 
 .month-day {
-  min-height: 46px;
+  min-height: 34px;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  padding: 4px 5px;
+  padding: 4px;
   background: #f9fafb;
+  position: relative;
 }
 
 .month-day.empty {
@@ -227,29 +228,31 @@ form button[type="submit"]:hover {
 }
 
 .day-number {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: #374151;
 }
 
 .day-dots {
-  margin-top: 4px;
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
   align-items: center;
+  justify-content: center;
 }
 
 .day-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 16px;
-  min-height: 14px;
-  padding: 0 4px;
-  border-radius: 7px;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border-radius: 50%;
   background: #0d9488;
   color: #ffffff;
-  font-size: 0.62rem;
+  font-size: 0.56rem;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
 }
