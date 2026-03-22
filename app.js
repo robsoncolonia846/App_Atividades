@@ -1343,7 +1343,7 @@ function buildDateCountMap(rangeStart, rangeEnd) {
   const counts = {};
 
   for (const task of tasks) {
-    if (task.deleted) continue;
+    if (task.deleted || task.completed) continue;
     const dateKey = getTaskCalendarDate(task);
     const [ty, tm, td] = dateKey.split("-").map(Number);
     const taskDate = new Date(ty, (tm || 1) - 1, td || 1, 12, 0, 0, 0);
