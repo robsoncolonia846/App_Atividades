@@ -1275,8 +1275,16 @@ function renderTask(task, mode) {
     deleteBtn.addEventListener("click", () => purgeTask(task.id));
   } else {
     restoreBtn.classList.add("is-hidden");
-    moveUpBtn.classList.add("is-hidden");
-    moveDownBtn.classList.add("is-hidden");
+    const sameDateMeta = sameDateMetaMap[task.id] || { index: 0, total: 1 };
+    if (sameDateMeta.total <= 1) {
+      moveUpBtn.classList.add("is-hidden");
+      moveDownBtn.classList.add("is-hidden");
+    } else {
+      moveUpBtn.disabled = sameDateMeta.index === 0;
+      moveDownBtn.disabled = sameDateMeta.index === sameDateMeta.total - 1;
+      moveUpBtn.addEventListener("click", () => moveTaskWithinDate(task.id, -1));
+      moveDownBtn.addEventListener("click", () => moveTaskWithinDate(task.id, 1));
+    }
 
     toggleBtn.addEventListener("click", () => toggleComplete(task.id));
     dateBtn.addEventListener("click", () => {
