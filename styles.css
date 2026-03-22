@@ -232,13 +232,17 @@ form button[type="submit"]:hover {
   position: relative;
 }
 
-.month-day.empty {
-  background: transparent;
-  border-color: transparent;
-}
-
 .month-day.today {
   border-color: #0d9488;
+}
+
+.month-day.outside-month {
+  background: #eef3f6;
+  border-color: #d7e0e7;
+}
+
+.month-day.outside-month .day-number {
+  color: #64748b;
 }
 
 .day-number {
@@ -319,6 +323,7 @@ form button[type="submit"]:hover {
   background: #fafafa;
 }
 
+#task-list-overdue,
 #task-list-open,
 #task-list-done,
 #task-list-deleted {
@@ -329,17 +334,39 @@ form button[type="submit"]:hover {
   gap: 8px;
 }
 
+.overdue-section {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff7f7 0%, #fff 100%);
+}
+
+.overdue-section .section-title {
+  color: #b91c1c;
+}
+
 .open-subgroup {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 10px;
+  border: 1px solid #d8e5e3;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f7fbfa 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .open-subgroup-title {
-  margin: 6px 0 8px;
-  font-size: 0.85rem;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e6f4f1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: #4b5563;
+  color: #0f766e;
 }
 
 .open-subgroup-list {

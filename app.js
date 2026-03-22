@@ -21,6 +21,7 @@ const submitBtn = document.getElementById("submit-btn");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 
 const openListEl = document.getElementById("task-list-open");
+const overdueListEl = document.getElementById("task-list-overdue");
 const doneListEl = document.getElementById("task-list-done");
 const deletedListEl = document.getElementById("task-list-deleted");
 const template = document.getElementById("task-template");
@@ -52,6 +53,7 @@ function setSyncStatus(text) {
 
 function setStorageSource(text) {
   storageSourceEl.textContent = text;
+  storageSourceEl.hidden = !text;
 }
 
 function updateNotificationStatus() {
@@ -471,53 +473,42 @@ function sortOpenTasks(list) {
   return [...list].sort(compareByDateThenRank);
 }
 
-function splitOpenTasks(openTasks) {
+function isTaskOverdue(task) {
+  const [y, m, d] = getTaskCalendarDate(task).split("-").map(Number);
+  const due = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  return due < today;
+}
 
-  const endThisWeek = new Date(today);
-  endThisWeek.setDate(endThisWeek.getDate() + (7 - endThisWeek.getDay()));
-  endThisWeek.setHours(23, 59, 59, 999);
+function getOpenGroupTitle(isoDate, count) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const current = new Date();
+  current.setHours(0, 0, 0, 0);
+  const date = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
+  const base = formatDateWithWeekday(isoDate);
+  const suffix = date < current ? "Atrasado" : isoDate === todayIso() ? "Hoje" : "";
+  const countLabel = count === 1 ? "1 atividade" : `${count} atividades`;
 
-  const endNextWeek = new Date(endThisWeek);
-  endNextWeek.setDate(endNextWeek.getDate() + 7);
-  endNextWeek.setHours(23, 59, 59, 999);
+  return suffix
+    ? `${base} - ${suffix} - ${countLabel}`
+    : `${base} - ${countLabel}`;
+}
 
-  const endThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-
-  const buckets = {
-    overdue: [],
-    today: [],
-    thisWeek: [],
-    nextWeek: [],
-    thisMonth: [],
-    nextMonths: [],
-  };
+function groupOpenTasksByDate(openTasks) {
+  const grouped = new Map();
 
   for (const task of openTasks) {
-    const [y, m, d] = task.dueDate.split("-").map(Number);
-    const due = new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
-
-    if (due < today) {
-      buckets.overdue.push(task);
-    } else if (
-      due.getFullYear() === today.getFullYear() &&
-      due.getMonth() === today.getMonth() &&
-      due.getDate() === today.getDate()
-    ) {
-      buckets.today.push(task);
-    } else if (due <= endThisWeek) {
-      buckets.thisWeek.push(task);
-    } else if (due <= endNextWeek) {
-      buckets.nextWeek.push(task);
-    } else if (due <= endThisMonth) {
-      buckets.thisMonth.push(task);
-    } else {
-      buckets.nextMonths.push(task);
-    }
+    const key = getTaskCalendarDate(task);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(task);
   }
 
-  return buckets;
+  return [...grouped.entries()].map(([date, items]) => ({
+    date,
+    title: getOpenGroupTitle(date, items.length),
+    items,
+  }));
 }
 
 function sortDoneTasks(list) {
@@ -1348,16 +1339,15 @@ function getTaskCalendarDate(task) {
   return task.dueDate;
 }
 
-function buildDateCountMap(monthDate) {
-  const y = monthDate.getFullYear();
-  const m = monthDate.getMonth();
+function buildDateCountMap(rangeStart, rangeEnd) {
   const counts = {};
 
   for (const task of tasks) {
     if (task.deleted) continue;
     const dateKey = getTaskCalendarDate(task);
-    const [ty, tm] = dateKey.split("-").map(Number);
-    if (ty !== y || ((tm || 1) - 1) !== m) continue;
+    const [ty, tm, td] = dateKey.split("-").map(Number);
+    const taskDate = new Date(ty, (tm || 1) - 1, td || 1, 12, 0, 0, 0);
+    if (taskDate < rangeStart || taskDate > rangeEnd) continue;
     counts[dateKey] = (counts[dateKey] || 0) + 1;
   }
 
@@ -1368,39 +1358,49 @@ function renderMonthlyPanel() {
   const year = monthCursor.getFullYear();
   const month = monthCursor.getMonth();
   const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const monthName = firstDay.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const dateCount = buildDateCountMap(monthCursor);
   const today = new Date();
+  const isCurrentMonth =
+    today.getFullYear() === year &&
+    today.getMonth() === month;
+
+  const gridStart = isCurrentMonth
+    ? new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay())
+    : new Date(year, month, 1 - firstDay.getDay());
+  gridStart.setHours(12, 0, 0, 0);
+
+  const totalCells = 35;
+  const gridEnd = new Date(gridStart);
+  gridEnd.setDate(gridStart.getDate() + totalCells - 1);
+  const dateCount = buildDateCountMap(gridStart, gridEnd);
 
   monthLabelEl.textContent = monthName;
   monthGridEl.innerHTML = "";
 
-  for (let i = 0; i < startWeekday; i += 1) {
-    const empty = document.createElement("div");
-    empty.className = "month-day empty";
-    monthGridEl.appendChild(empty);
-  }
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
+  for (let offset = 0; offset < totalCells; offset += 1) {
+    const cellDate = new Date(gridStart);
+    cellDate.setDate(gridStart.getDate() + offset);
     const cell = document.createElement("div");
     cell.className = "month-day";
 
     if (
-      today.getFullYear() === year &&
-      today.getMonth() === month &&
-      today.getDate() === day
+      today.getFullYear() === cellDate.getFullYear() &&
+      today.getMonth() === cellDate.getMonth() &&
+      today.getDate() === cellDate.getDate()
     ) {
       cell.classList.add("today");
     }
 
+    if (cellDate.getMonth() !== month) {
+      cell.classList.add("outside-month");
+    }
+
     const num = document.createElement("div");
     num.className = "day-number";
-    num.textContent = String(day);
+    num.textContent = String(cellDate.getDate());
     cell.appendChild(num);
 
-    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dateKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, "0")}-${String(cellDate.getDate()).padStart(2, "0")}`;
     const count = dateCount[dateKey] || 0;
     if (count > 0) {
       const dots = document.createElement("div");
@@ -1419,28 +1419,31 @@ function renderMonthlyPanel() {
 function render() {
   const beforePositions = captureTaskPositions();
 
+  overdueListEl.innerHTML = "";
   openListEl.innerHTML = "";
   doneListEl.innerHTML = "";
   deletedListEl.innerHTML = "";
 
   const activeTasks = tasks.filter((t) => !t.deleted);
   sameDateMetaMap = createSameDateMetaMap(activeTasks);
-  const openTasks = sortOpenTasks(activeTasks.filter((t) => !t.completed));
+  const openTasksAll = sortOpenTasks(activeTasks.filter((t) => !t.completed));
+  const overdueTasks = openTasksAll.filter((task) => isTaskOverdue(task));
+  const openTasks = openTasksAll.filter((task) => !isTaskOverdue(task));
   const doneTasks = sortDoneTasks(activeTasks.filter((t) => t.completed));
   const deletedTasks = sortDeletedTasks(tasks.filter((t) => t.deleted));
+
+  if (overdueTasks.length === 0) {
+    overdueListEl.innerHTML = '<li class="empty-state">Nenhuma atividade atrasada.</li>';
+  } else {
+    for (const task of overdueTasks) {
+      overdueListEl.appendChild(renderTask(task, "open"));
+    }
+  }
 
   if (openTasks.length === 0) {
     openListEl.innerHTML = '<li class="empty-state">Nenhuma atividade em aberto.</li>';
   } else {
-    const buckets = splitOpenTasks(openTasks);
-    const groups = [
-      { title: "Atrasado", items: buckets.overdue },
-      { title: "Hoje", items: buckets.today },
-      { title: "Esta semana (Até Domingo)", items: buckets.thisWeek },
-      { title: "Proxima semana", items: buckets.nextWeek },
-      { title: "Este mes", items: buckets.thisMonth },
-      { title: "Proximos meses", items: buckets.nextMonths },
-    ];
+    const groups = groupOpenTasksByDate(openTasks);
 
     for (const group of groups) {
       if (group.items.length === 0) continue;
@@ -1493,7 +1496,7 @@ function formatDateWithWeekday(iso) {
   return `${dt.toLocaleDateString("pt-BR")} (${weekdays[dt.getDay()]})`;
 }
 
-setStorageSource("Base: local");
+setStorageSource("");
 setSyncStatus("");
 updateNotificationStatus();
 render();
