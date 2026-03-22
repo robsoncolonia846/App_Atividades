@@ -1076,6 +1076,27 @@ function getDragPlacement(node, event) {
   return event.clientY < midpoint ? "before" : "after";
 }
 
+function findTouchDropTarget(draggedId, clientY) {
+  const draggedTask = tasks.find((item) => item.id === draggedId);
+  if (!draggedTask) return null;
+
+  const candidates = [...document.querySelectorAll(".task-item[data-id]")]
+    .filter((item) => item.dataset.id !== draggedId)
+    .filter((item) => {
+      const candidateTask = tasks.find((task) => task.id === item.dataset.id);
+      return candidateTask && getTaskCalendarDate(candidateTask) === getTaskCalendarDate(draggedTask);
+    });
+
+  for (const item of candidates) {
+    const rect = item.getBoundingClientRect();
+    if (clientY >= rect.top && clientY <= rect.bottom) {
+      return item;
+    }
+  }
+
+  return null;
+}
+
 function attachDragHandlers(node, task, mode) {
   if (mode !== "open") return;
 
@@ -1119,6 +1140,12 @@ function attachDragHandlers(node, task, mode) {
     if (event.pointerType !== "touch") return;
     if (event.target.closest("button, input, select, label")) return;
 
+    try {
+      node.setPointerCapture(event.pointerId);
+    } catch {
+      // Some browsers may reject capture; dragging can still continue.
+    }
+
     dragState = {
       id: task.id,
       pointerId: event.pointerId,
@@ -1143,7 +1170,7 @@ function attachDragHandlers(node, task, mode) {
     }
 
     event.preventDefault();
-    const targetEl = document.elementFromPoint(event.clientX, event.clientY)?.closest(".task-item[data-id]");
+    const targetEl = findTouchDropTarget(task.id, event.clientY);
     if (!targetEl) {
       clearDragIndicators();
       node.classList.add("is-dragging");
@@ -1163,6 +1190,12 @@ function attachDragHandlers(node, task, mode) {
 
   function finishPointerDrag(event) {
     if (!dragState || dragState.pointerId !== event.pointerId || dragState.id !== task.id) return;
+
+    try {
+      node.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore browsers that do not support capture release here.
+    }
 
     const { dragging, targetId, placement } = dragState;
     dragState = null;
