@@ -13,8 +13,6 @@ const exportJsonBtn = document.getElementById("export-json-btn");
 const storageSourceEl = document.getElementById("storage-source");
 const syncStatusEl = document.getElementById("sync-status");
 const jsonFileInputEl = document.getElementById("json-file-input");
-const notificationStatusEl = document.getElementById("notification-status");
-const testAlarmBtn = document.getElementById("test-alarm-btn");
 
 const titleInput = document.getElementById("title");
 const dueDateInput = document.getElementById("dueDate");
@@ -32,6 +30,12 @@ const monthLabelEl = document.getElementById("month-label");
 const monthGridEl = document.getElementById("month-grid");
 const monthPrevBtn = document.getElementById("month-prev");
 const monthNextBtn = document.getElementById("month-next");
+const monthCardEl = document.querySelector(".month-card");
+const dayPreviewEl = document.getElementById("day-preview");
+const dayPreviewTitleEl = document.getElementById("day-preview-title");
+const dayPreviewListEl = document.getElementById("day-preview-list");
+const dayPreviewGotoBtn = document.getElementById("day-preview-goto");
+const dayPreviewCloseBtn = document.getElementById("day-preview-close");
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 dueDateInput.value = todayIso();
@@ -43,8 +47,7 @@ let sameDateMetaMap = {};
 let monthCursor = new Date();
 monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
 let dragState = null;
-let alarmTimer = null;
-
+let selectedDayPreviewDate = null;
 let syncedFileHandle = null;
 let fileSyncTimer = null;
 let isWritingFile = false;
@@ -56,21 +59,6 @@ function setSyncStatus(text) {
 function setStorageSource(text) {
   storageSourceEl.textContent = text;
   storageSourceEl.hidden = !text;
-}
-
-function updateNotificationStatus() {
-  if (!notificationStatusEl) return;
-  if (!("Notification" in window)) {
-    notificationStatusEl.textContent = "Notificacoes: navegador nao suporta";
-    return;
-  }
-
-  const labels = {
-    granted: "Notificacoes: permitidas",
-    denied: "Notificacoes: bloqueadas",
-    default: "Notificacoes: pendentes",
-  };
-  notificationStatusEl.textContent = labels[Notification.permission] || "Notificacoes: pendentes";
 }
 
 function supportsFileSync() {
@@ -315,9 +303,37 @@ function buildExportFileName() {
   return `atividades-backup-${yyyy}-${mm}-${dd}-${hh}-${mi}-${ss}.json`;
 }
 
-function exportTasksJson() {
+async function exportTasksJson() {
+  const jsonText = JSON.stringify(tasks, null, 2);
+
+  if (typeof window.showSaveFilePicker === "function") {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: buildExportFileName(),
+        types: [
+          {
+            description: "Arquivo JSON",
+            accept: { "application/json": [".json"] },
+          },
+        ],
+      });
+
+      const writable = await handle.createWritable();
+      await writable.write(jsonText);
+      await writable.close();
+      setSyncStatus("JSON exportado com sucesso.");
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        setSyncStatus("Exportacao cancelada.");
+        return;
+      }
+      setSyncStatus("Falha ao salvar no local escolhido. Tentando download...");
+    }
+  }
+
   try {
-    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+    const blob = new Blob([jsonText], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -326,7 +342,7 @@ function exportTasksJson() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    setSyncStatus("JSON exportado com sucesso.");
+    setSyncStatus("JSON exportado por download.");
   } catch {
     setSyncStatus("Falha ao exportar JSON.");
   }
@@ -352,7 +368,7 @@ if (importJsonBtn && jsonFileInputEl) {
 
 if (exportJsonBtn) {
   exportJsonBtn.addEventListener("click", () => {
-    exportTasksJson();
+    void exportTasksJson();
   });
 }
 
@@ -411,11 +427,33 @@ toggleFormBtn.addEventListener("click", () => {
 
 monthPrevBtn.addEventListener("click", () => {
   monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1);
+  closeDayPreview();
   renderMonthlyPanel();
 });
 
 monthNextBtn.addEventListener("click", () => {
   monthCursor = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1);
+  closeDayPreview();
+  renderMonthlyPanel();
+});
+
+if (dayPreviewCloseBtn) {
+  dayPreviewCloseBtn.addEventListener("click", () => {
+    closeDayPreview();
+    renderMonthlyPanel();
+  });
+}
+
+if (dayPreviewGotoBtn) {
+  dayPreviewGotoBtn.addEventListener("click", () => {
+    scrollToSelectedDayInList();
+  });
+}
+
+document.addEventListener("click", (event) => {
+  if (!selectedDayPreviewDate || !monthCardEl) return;
+  if (monthCardEl.contains(event.target)) return;
+  closeDayPreview();
   renderMonthlyPanel();
 });
 
@@ -619,157 +657,9 @@ function advanceDate(isoDate, recurrence) {
   return d.toISOString().slice(0, 10);
 }
 
-function formatAlarmLabel(alarmTime) {
-  return alarmTime ? `Despertador: ${alarmTime}` : "Despertador: desligado";
-}
-
-function buildMetaExtraHtml(task, mode) {
+function buildMetaExtraText(task, mode) {
   const statusText = mode === "deleted" ? "Status: excluida" : task.completed ? "Status: concluida" : "Status: ativa";
-  const alarmText = formatAlarmLabel(task.alarmTime);
-  const alarmHtml = task.alarmTime
-    ? `<span class="alarm-status">${alarmText}</span>`
-    : alarmText;
-
-  return `Recorrencia: ${recurrenceLabel(task.recurrence)} | ${alarmHtml} | ${statusText}`;
-}
-
-function getAlarmDateTime(task) {
-  if (!task.alarmTime) return null;
-  const dateKey = getTaskCalendarDate(task);
-  const alarmDate = new Date(`${dateKey}T${task.alarmTime}:00`);
-  return Number.isNaN(alarmDate.getTime()) ? null : alarmDate;
-}
-
-function playAlarmSound() {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
-
-  try {
-    const context = new AudioContextClass();
-    const now = context.currentTime;
-    const envelope = [
-      { frequency: 880, start: now, duration: 0.16 },
-      { frequency: 660, start: now + 0.22, duration: 0.16 },
-      { frequency: 880, start: now + 0.44, duration: 0.22 },
-    ];
-
-    envelope.forEach((tone) => {
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(tone.frequency, tone.start);
-      gainNode.gain.setValueAtTime(0.0001, tone.start);
-      gainNode.gain.exponentialRampToValueAtTime(0.18, tone.start + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, tone.start + tone.duration);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(context.destination);
-      oscillator.start(tone.start);
-      oscillator.stop(tone.start + tone.duration);
-    });
-
-    window.setTimeout(() => {
-      void context.close();
-    }, 1200);
-  } catch {
-    // Some browsers may block audio until user interaction.
-  }
-}
-
-function showAlarm(task) {
-  const alarmDate = getAlarmDateTime(task);
-  const timeLabel = alarmDate
-    ? alarmDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : task.alarmTime;
-  const message = `${task.title} - ${formatDateWithWeekday(getTaskCalendarDate(task))} as ${timeLabel}`;
-
-  playAlarmSound();
-
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification("Lembrete de atividade", { body: message });
-  }
-
-  window.alert(`Lembrete: ${message}`);
-}
-
-function checkTaskAlarms() {
-  const now = Date.now();
-  let changed = false;
-
-  tasks = tasks.map((task) => {
-    if (task.deleted || task.completed || !task.alarmTime) return task;
-
-    const alarmDate = getAlarmDateTime(task);
-    if (!alarmDate) return task;
-
-    const triggerAt = alarmDate.getTime();
-    if (triggerAt > now || task.alarmTriggeredAt === triggerAt) return task;
-
-    showAlarm(task);
-    changed = true;
-    return {
-      ...task,
-      alarmTriggeredAt: triggerAt,
-    };
-  });
-
-  if (changed) {
-    persist();
-    render();
-  }
-}
-
-function startAlarmWatcher() {
-  if (alarmTimer) clearInterval(alarmTimer);
-  alarmTimer = window.setInterval(checkTaskAlarms, 30000);
-  checkTaskAlarms();
-}
-
-async function requestNotificationAccess() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "granted" || Notification.permission === "denied") return;
-
-  try {
-    await Notification.requestPermission();
-  } catch {
-    // Alert fallback remains available.
-  }
-  updateNotificationStatus();
-}
-
-function updateTaskAlarm(id, alarmTime) {
-  tasks = tasks.map((task) => {
-    if (task.id !== id || task.deleted) return task;
-    return {
-      ...task,
-      alarmTime,
-      alarmTriggeredAt: null,
-    };
-  });
-
-  persist();
-  render();
-}
-
-function triggerTestAlarm() {
-  playAlarmSound();
-
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification("Teste de alerta", {
-      body: "Se voce recebeu isso, as notificacoes do app estao funcionando neste navegador.",
-    });
-  }
-
-  window.alert("Teste de alerta disparado.");
-}
-
-if (testAlarmBtn) {
-  testAlarmBtn.addEventListener("click", async () => {
-    await requestNotificationAccess();
-    updateNotificationStatus();
-    triggerTestAlarm();
-  });
+  return `Recorrencia: ${recurrenceLabel(task.recurrence)} | ${statusText}`;
 }
 
 function postpone(id, days = 1) {
@@ -1257,14 +1147,13 @@ function purgeTask(id) {
 function renderTask(task, mode) {
   const node = template.content.firstElementChild.cloneNode(true);
   node.dataset.id = task.id;
+  node.dataset.dateKey = getTaskCalendarDate(task);
   node.classList.toggle("done", task.completed);
   node.classList.toggle("deleted", mode === "deleted");
 
   const toggleBtn = node.querySelector(".btn-toggle");
   const datePicker = node.querySelector(".date-picker-inline");
   const dateBtn = node.querySelector(".btn-calendar");
-  const alarmBtn = node.querySelector(".btn-alarm");
-  const timePicker = node.querySelector(".time-picker-inline");
   const minusBtn = node.querySelector(".btn-postpone-minus");
   const plusBtn = node.querySelector(".btn-postpone");
   const editBtn = node.querySelector(".btn-edit");
@@ -1272,11 +1161,8 @@ function renderTask(task, mode) {
   const moveUpBtn = node.querySelector(".btn-move-up");
   const moveDownBtn = node.querySelector(".btn-move-down");
   const restoreBtn = node.querySelector(".btn-restore");
-  const hasAlarm = Boolean(task.alarmTime);
 
   toggleBtn.classList.toggle("checked", task.completed);
-  alarmBtn.classList.toggle("active", hasAlarm);
-  alarmBtn.textContent = hasAlarm ? `Relogio ${task.alarmTime}` : "Relogio";
 
   const displayDate = task.completed && task.nextDueDate
     ? `${formatDateWithWeekday(task.dueDate)} -> ${formatDateWithWeekday(task.nextDueDate)}`
@@ -1288,18 +1174,15 @@ function renderTask(task, mode) {
   h3.appendChild(document.createTextNode(task.title));
   node.querySelector(".meta-date").textContent = `Data: ${displayDate}`;
 
-  node.querySelector(".meta-extra").innerHTML = buildMetaExtraHtml(task, mode);
+  node.querySelector(".meta-extra").textContent = buildMetaExtraText(task, mode);
 
   datePicker.value = editableDate;
-  timePicker.value = task.alarmTime || "";
 
   if (mode === "deleted") {
     toggleBtn.classList.add("is-hidden");
     minusBtn.classList.add("is-hidden");
     plusBtn.classList.add("is-hidden");
     dateBtn.classList.add("is-hidden");
-    alarmBtn.classList.add("is-hidden");
-    timePicker.classList.add("is-hidden");
     datePicker.classList.add("is-hidden");
     editBtn.classList.add("is-hidden");
     moveUpBtn.classList.add("is-hidden");
@@ -1341,28 +1224,6 @@ function renderTask(task, mode) {
       datePicker.classList.remove("show");
     });
 
-    alarmBtn.addEventListener("click", () => {
-      timePicker.classList.add("show");
-      requestAnimationFrame(() => {
-        try {
-          timePicker.showPicker();
-        } catch {
-          timePicker.focus();
-          timePicker.click();
-        }
-      });
-      void requestNotificationAccess();
-    });
-
-    timePicker.addEventListener("change", () => {
-      updateTaskAlarm(task.id, timePicker.value || "");
-      timePicker.classList.remove("show");
-    });
-
-    timePicker.addEventListener("blur", () => {
-      timePicker.classList.remove("show");
-    });
-
     minusBtn.addEventListener("click", () => postpone(task.id, -1));
     plusBtn.addEventListener("click", () => postpone(task.id, 1));
     editBtn.addEventListener("click", () => startEdit(task.id));
@@ -1395,6 +1256,81 @@ function buildDateCountMap(rangeStart, rangeEnd) {
   }
 
   return counts;
+}
+
+function closeDayPreview() {
+  selectedDayPreviewDate = null;
+  if (dayPreviewEl) dayPreviewEl.hidden = true;
+  applySelectedDayGroupHighlight();
+}
+
+function getDayPreviewTasks(dateKey) {
+  return sortOpenTasks(
+    tasks.filter((task) => !task.deleted && !task.completed && getTaskCalendarDate(task) === dateKey),
+  );
+}
+
+function renderDayPreview() {
+  if (!dayPreviewEl || !dayPreviewTitleEl || !dayPreviewListEl) return;
+  if (!selectedDayPreviewDate) {
+    dayPreviewEl.hidden = true;
+    if (dayPreviewGotoBtn) dayPreviewGotoBtn.disabled = true;
+    return;
+  }
+
+  const dayTasks = getDayPreviewTasks(selectedDayPreviewDate);
+  const titleDate = formatDateWithWeekday(selectedDayPreviewDate);
+  const qty = dayTasks.length;
+  dayPreviewTitleEl.textContent = `${titleDate} - ${qty} atividade${qty === 1 ? "" : "s"}`;
+
+  dayPreviewListEl.innerHTML = "";
+  if (qty === 0) {
+    dayPreviewListEl.innerHTML = '<li class="empty-state">Nenhuma atividade ativa nesse dia.</li>';
+  } else {
+    for (const task of dayTasks) {
+      const item = document.createElement("li");
+      item.textContent = task.title;
+      dayPreviewListEl.appendChild(item);
+    }
+  }
+
+  dayPreviewEl.hidden = false;
+  if (dayPreviewGotoBtn) dayPreviewGotoBtn.disabled = qty === 0;
+}
+
+function openDayPreview(dateKey) {
+  selectedDayPreviewDate = dateKey;
+  renderDayPreview();
+  applySelectedDayGroupHighlight();
+  if (dayPreviewEl) {
+    dayPreviewEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function applySelectedDayGroupHighlight() {
+  document.querySelectorAll(".open-subgroup.selected-day-group").forEach((el) => {
+    el.classList.remove("selected-day-group");
+  });
+
+  if (!selectedDayPreviewDate) return;
+  const escapedDate = CSS.escape(selectedDayPreviewDate);
+  const group = document.querySelector(`.open-subgroup[data-date-key="${escapedDate}"]`);
+  if (group) {
+    group.classList.add("selected-day-group");
+  }
+}
+
+function scrollToSelectedDayInList() {
+  if (!selectedDayPreviewDate) return;
+
+  const escapedDate = CSS.escape(selectedDayPreviewDate);
+  const target = document.querySelector(`.open-subgroup[data-date-key="${escapedDate}"]`);
+  if (!target) {
+    setSyncStatus("Nao achei atividades desse dia na lista.");
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function renderMonthlyPanel() {
@@ -1445,6 +1381,9 @@ function renderMonthlyPanel() {
 
     const dateKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, "0")}-${String(cellDate.getDate()).padStart(2, "0")}`;
     const count = dateCount[dateKey] || 0;
+    if (selectedDayPreviewDate === dateKey) {
+      cell.classList.add("selected-day");
+    }
     if (count > 0) {
       const dots = document.createElement("div");
       dots.className = "day-dots";
@@ -1453,6 +1392,9 @@ function renderMonthlyPanel() {
       tag.textContent = String(count);
       dots.appendChild(tag);
       cell.appendChild(dots);
+
+      cell.classList.add("has-tasks");
+      cell.addEventListener("click", () => openDayPreview(dateKey));
     }
 
     monthGridEl.appendChild(cell);
@@ -1493,6 +1435,7 @@ function render() {
 
       const groupItem = document.createElement("li");
       groupItem.className = "open-subgroup";
+      groupItem.dataset.dateKey = group.date;
 
       const heading = document.createElement("h4");
       heading.className = "open-subgroup-title";
@@ -1529,6 +1472,8 @@ function render() {
 
   statsEl.textContent = "";
   renderMonthlyPanel();
+  renderDayPreview();
+  applySelectedDayGroupHighlight();
   animateTaskReorder(beforePositions);
 }
 
@@ -1541,10 +1486,12 @@ function formatDateWithWeekday(iso) {
 
 setStorageSource("Base: local");
 setSyncStatus("Dados salvos localmente. Use Importar/Exportar JSON para backup.");
-updateNotificationStatus();
 render();
-startAlarmWatcher();
 if (ENABLE_FILE_SYNC) {
   void tryAutoReconnectSavedHandle();
 }
+
+
+
+
 

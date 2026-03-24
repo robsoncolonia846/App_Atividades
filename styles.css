@@ -95,20 +95,6 @@ body {
   font-size: 0.78rem;
 }
 
-.notification-tools {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-#notification-status {
-  color: #4b5563;
-  font-size: 0.78rem;
-}
-
 form {
   margin-top: 10px;
 }
@@ -232,6 +218,19 @@ form button[type="submit"]:hover {
   position: relative;
 }
 
+.month-day.has-tasks {
+  cursor: pointer;
+}
+
+.month-day.has-tasks:hover {
+  border-color: #0d9488;
+}
+
+.month-day.selected-day {
+  border-color: #0d9488;
+  box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.25);
+}
+
 .month-day.today {
   border-color: #0d9488;
 }
@@ -278,6 +277,67 @@ form button[type="submit"]:hover {
 .day-dots small {
   font-size: 0.65rem;
   color: #6b7280;
+}
+
+.day-preview {
+  margin-top: 10px;
+  border: 1px solid #d1e7e3;
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(180deg, #f5fbfa 0%, #ffffff 100%);
+}
+
+.day-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.day-preview-head h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #0f766e;
+}
+
+.day-preview-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.day-preview-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: #334155;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.day-preview-close:hover {
+  background: #0f172a;
+}
+
+#day-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+#day-preview-list li {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  font-size: 0.86rem;
 }
 
 .list-head {
@@ -354,6 +414,14 @@ form button[type="submit"]:hover {
   border-radius: 14px;
   background: linear-gradient(180deg, #f7fbfa 0%, #ffffff 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.open-subgroup.selected-day-group {
+  border-color: #0d9488;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 2px rgba(13, 148, 136, 0.22);
+  background: linear-gradient(180deg, #eefaf7 0%, #ffffff 100%);
 }
 
 .open-subgroup-title {
@@ -488,7 +556,6 @@ form button[type="submit"]:hover {
   margin-top: 3px;
 }
 
-.task-item .time-picker-inline.show,
 .task-item .date-picker-inline.show {
   display: block;
   flex-basis: 100%;
@@ -504,11 +571,6 @@ form button[type="submit"]:hover {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.8rem;
-}
-
-.meta-extra .alarm-status {
-  color: #c2410c;
-  font-weight: 700;
 }
 
 .meta-line button {
@@ -535,23 +597,8 @@ form button[type="submit"]:hover {
   padding: 4px 6px;
 }
 
-.time-picker-inline {
-  display: none;
-  width: 110px;
-  padding: 4px 6px;
-}
-
 .meta-line .btn-postpone-minus {
   background: #0891b2;
-}
-
-.meta-line .btn-alarm {
-  background: #ea580c;
-}
-
-.meta-line .btn-alarm.active {
-  background: #c2410c;
-  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.18);
 }
 
 .meta-line .btn-postpone {

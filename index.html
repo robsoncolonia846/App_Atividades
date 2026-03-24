@@ -25,10 +25,6 @@
           </div>
         </div>
         <small id="sync-status"></small>
-        <div class="notification-tools">
-          <small id="notification-status">Notificacoes: verificando...</small>
-          <button id="test-alarm-btn" type="button" class="sync-btn">Testar alerta</button>
-        </div>
 
         <form id="task-form" hidden>
           <label>
@@ -79,6 +75,16 @@
           <span>Sab</span>
         </div>
         <div id="month-grid" class="month-grid"></div>
+        <section id="day-preview" class="day-preview" hidden>
+          <div class="day-preview-head">
+            <h3 id="day-preview-title"></h3>
+            <div class="day-preview-actions">
+              <button id="day-preview-goto" type="button" class="sync-btn">Ir para ↓</button>
+              <button id="day-preview-close" type="button" class="sync-btn" aria-label="Fechar visualizacao diaria" title="Fechar visualizacao diaria">Fechar</button>
+            </div>
+          </div>
+          <ul id="day-preview-list"></ul>
+        </section>
       </section>
 
       <section class="card">
@@ -123,8 +129,6 @@
             <button class="btn-postpone-minus" title="Jogar para tras" type="button">-1 dia</button>
             <button class="btn-postpone" title="Jogar para frente" type="button">+1 dia</button>
             <button class="btn-calendar" title="Escolher data" type="button">Data</button>
-            <button class="btn-alarm" title="Definir despertador" type="button">Relogio</button>
-            <input class="time-picker-inline" type="time" />
             <button class="btn-delete danger" title="Excluir" type="button">Excluir</button>
             <button class="btn-move-up" title="Subir na data" type="button">↑</button>
             <button class="btn-move-down" title="Descer na data" type="button">↓</button>
