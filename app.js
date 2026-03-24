@@ -4,6 +4,8 @@ const BASE_FILE_NAME = "atividades-base.json";
 const HANDLE_DB_NAME = "atividades_sync_db";
 const HANDLE_STORE_NAME = "kv";
 const HANDLE_KEY = "json_file_handle";
+const JSON_PICKER_ID = "atividades-json-base";
+const IMPORT_HANDLE_KEY = "import_json_handle";
 
 const form = document.getElementById("task-form");
 const toggleFormBtn = document.getElementById("toggle-form-btn");
@@ -108,10 +110,28 @@ async function saveHandleForAutoReconnect(handle) {
   }
 }
 
+async function saveImportHandle(handle) {
+  if (!("indexedDB" in window)) return;
+  try {
+    await idbSet(IMPORT_HANDLE_KEY, handle);
+  } catch {
+    // Browsers may block handle persistence.
+  }
+}
+
 async function readSavedHandle() {
   if (!("indexedDB" in window)) return null;
   try {
     return await idbGet(HANDLE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function readSavedImportHandle() {
+  if (!("indexedDB" in window)) return null;
+  try {
+    return await idbGet(IMPORT_HANDLE_KEY);
   } catch {
     return null;
   }
@@ -127,6 +147,31 @@ async function ensureReadWritePermission(handle) {
   if (current === "granted") return true;
   const requested = await handle.requestPermission({ mode: "readwrite" });
   return requested === "granted";
+}
+
+async function hasReadPermission(handle) {
+  if (!handle) return false;
+  if (typeof handle.queryPermission !== "function") return true;
+  try {
+    const current = await handle.queryPermission({ mode: "read" });
+    return current === "granted";
+  } catch {
+    return false;
+  }
+}
+
+async function ensureReadPermission(handle) {
+  if (!handle) return false;
+  if (typeof handle.queryPermission !== "function") return true;
+  try {
+    const current = await handle.queryPermission({ mode: "read" });
+    if (current === "granted") return true;
+    if (typeof handle.requestPermission !== "function") return false;
+    const requested = await handle.requestPermission({ mode: "read" });
+    return requested === "granted";
+  } catch {
+    return false;
+  }
 }
 
 function sanitizeJsonText(text) {
@@ -260,11 +305,15 @@ async function chooseJsonBase() {
   if (supportsFileSync() && typeof window.showOpenFilePicker === "function") {
     try {
       const [handle] = await window.showOpenFilePicker({
+        id: JSON_PICKER_ID,
         multiple: false,
         types: [
           {
             description: "Arquivo JSON",
-            accept: { "application/json": [".json"] },
+            accept: {
+              "application/json": [".json"],
+              "text/plain": [".json", ".txt"],
+            },
           },
         ],
       });
@@ -284,11 +333,15 @@ async function chooseJsonBase() {
   if (supportsFileSync()) {
     try {
       const handle = await window.showSaveFilePicker({
+        id: JSON_PICKER_ID,
         suggestedName: BASE_FILE_NAME,
         types: [
           {
             description: "Arquivo JSON",
-            accept: { "application/json": [".json"] },
+            accept: {
+              "application/json": [".json"],
+              "text/plain": [".json", ".txt"],
+            },
           },
         ],
       });
@@ -312,7 +365,7 @@ async function chooseJsonBase() {
 }
 
 async function loadFromImportedFile(file) {
-  if (!file) return;
+  if (!file) return false;
   try {
     const text = await readFileAsText(file);
     tasks = parseTasksJsonText(text);
@@ -320,9 +373,75 @@ async function loadFromImportedFile(file) {
     setStorageSource(`Base: importada (${file.name})`);
     setSyncStatus(`JSON importado com sucesso (${file.name}).`);
     render();
+    return true;
   } catch (error) {
     const message = error && error.message ? error.message : "arquivo invalido.";
     setSyncStatus(`Erro ao importar JSON: ${message}`);
+    return false;
+  }
+}
+
+async function loadFromImportedHandle(handle, options = {}) {
+  if (!handle) return false;
+
+  const { requestPermission = false } = options;
+  const allowed = requestPermission ? await ensureReadPermission(handle) : await hasReadPermission(handle);
+  if (!allowed) return false;
+
+  try {
+    const file = await handle.getFile();
+    const imported = await loadFromImportedFile(file);
+    if (!imported) return false;
+    await saveImportHandle(handle);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function importTasksJson() {
+  if (typeof window.showOpenFilePicker === "function") {
+    try {
+      const savedHandle = await readSavedImportHandle();
+      if (savedHandle) {
+        const reused = await loadFromImportedHandle(savedHandle, { requestPermission: false });
+        if (reused) {
+          setSyncStatus(`JSON recarregado do ultimo arquivo (${savedHandle.name}).`);
+          return;
+        }
+      }
+
+      const [handle] = await window.showOpenFilePicker({
+        id: JSON_PICKER_ID,
+        multiple: false,
+        types: [
+          {
+            description: "Arquivo JSON",
+            accept: {
+              "application/json": [".json"],
+              "text/plain": [".json", ".txt"],
+            },
+          },
+        ],
+      });
+
+      const loaded = await loadFromImportedHandle(handle, { requestPermission: true });
+      if (!loaded) {
+        setSyncStatus("Nao foi possivel ler o arquivo selecionado.");
+      }
+      return;
+    } catch (error) {
+      if (error && error.name === "AbortError") {
+        setSyncStatus("Importacao cancelada.");
+        return;
+      }
+      setSyncStatus("Falha ao abrir seletor do navegador. Tentando seletor simples...");
+    }
+  }
+
+  if (jsonFileInputEl) {
+    jsonFileInputEl.value = "";
+    jsonFileInputEl.click();
   }
 }
 
@@ -343,11 +462,15 @@ async function exportTasksJson() {
   if (typeof window.showSaveFilePicker === "function") {
     try {
       const handle = await window.showSaveFilePicker({
+        id: JSON_PICKER_ID,
         suggestedName: buildExportFileName(),
         types: [
           {
             description: "Arquivo JSON",
-            accept: { "application/json": [".json"] },
+            accept: {
+              "application/json": [".json"],
+              "text/plain": [".json", ".txt"],
+            },
           },
         ],
       });
@@ -395,8 +518,7 @@ if (syncJsonBtn) {
 
 if (importJsonBtn && jsonFileInputEl) {
   importJsonBtn.addEventListener("click", () => {
-    jsonFileInputEl.value = "";
-    jsonFileInputEl.click();
+    void importTasksJson();
   });
 }
 
