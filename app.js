@@ -129,14 +129,53 @@ async function ensureReadWritePermission(handle) {
   return requested === "granted";
 }
 
+function sanitizeJsonText(text) {
+  if (typeof text !== "string") return "";
+  return text.replace(/^\uFEFF/, "").trim();
+}
+
+function extractTasksArray(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const candidates = ["tasks", "atividades", "items", "data"];
+  for (const key of candidates) {
+    if (Array.isArray(parsed[key])) {
+      return parsed[key];
+    }
+  }
+  return null;
+}
+
+function parseTasksJsonText(text) {
+  const cleanText = sanitizeJsonText(text);
+  if (!cleanText) return [];
+
+  const parsed = JSON.parse(cleanText);
+  const data = extractTasksArray(parsed);
+  if (!data) {
+    throw new Error("JSON invalido. Use lista [ ... ] ou objeto { tasks: [ ... ] }.");
+  }
+  return normalizeTasks(data);
+}
+
+function readFileAsText(file) {
+  if (file && typeof file.text === "function") {
+    return file.text();
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(reader.error || new Error("Falha ao ler arquivo."));
+    reader.readAsText(file);
+  });
+}
+
 async function readTasksFromHandle(handle) {
   const file = await handle.getFile();
-  const text = await file.text();
-  if (!text.trim()) return [];
-
-  const data = JSON.parse(text);
-  if (!Array.isArray(data)) throw new Error("JSON invalido");
-  return normalizeTasks(data);
+  const text = await readFileAsText(file);
+  return parseTasksJsonText(text);
 }
 
 async function writeTasksToHandle(handle) {
@@ -275,20 +314,15 @@ async function chooseJsonBase() {
 async function loadFromImportedFile(file) {
   if (!file) return;
   try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) {
-      setSyncStatus("JSON invalido. O arquivo precisa conter uma lista de atividades.");
-      return;
-    }
-
-    tasks = normalizeTasks(parsed);
+    const text = await readFileAsText(file);
+    tasks = parseTasksJsonText(text);
     persist();
     setStorageSource(`Base: importada (${file.name})`);
-    setSyncStatus("JSON importado com sucesso.");
+    setSyncStatus(`JSON importado com sucesso (${file.name}).`);
     render();
-  } catch {
-    setSyncStatus("Erro ao ler/importar o JSON.");
+  } catch (error) {
+    const message = error && error.message ? error.message : "arquivo invalido.";
+    setSyncStatus(`Erro ao importar JSON: ${message}`);
   }
 }
 
