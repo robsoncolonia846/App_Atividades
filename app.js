@@ -8,6 +8,8 @@ const HANDLE_KEY = "json_file_handle";
 const form = document.getElementById("task-form");
 const toggleFormBtn = document.getElementById("toggle-form-btn");
 const syncJsonBtn = document.getElementById("sync-json-btn");
+const importJsonBtn = document.getElementById("import-json-btn");
+const exportJsonBtn = document.getElementById("export-json-btn");
 const storageSourceEl = document.getElementById("storage-source");
 const syncStatusEl = document.getElementById("sync-status");
 const jsonFileInputEl = document.getElementById("json-file-input");
@@ -293,12 +295,40 @@ async function loadFromImportedFile(file) {
     }
 
     tasks = normalizeTasks(parsed);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    persist();
     setStorageSource(`Base: importada (${file.name})`);
-    setSyncStatus("Arquivo importado. Neste navegador, a gravacao continua local.");
+    setSyncStatus("JSON importado com sucesso.");
     render();
   } catch {
     setSyncStatus("Erro ao ler/importar o JSON.");
+  }
+}
+
+function buildExportFileName() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mi = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  return `atividades-backup-${yyyy}-${mm}-${dd}-${hh}-${mi}-${ss}.json`;
+}
+
+function exportTasksJson() {
+  try {
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = buildExportFileName();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setSyncStatus("JSON exportado com sucesso.");
+  } catch {
+    setSyncStatus("Falha ao exportar JSON.");
   }
 }
 
@@ -313,7 +343,20 @@ if (syncJsonBtn) {
   });
 }
 
-if (jsonFileInputEl && ENABLE_FILE_SYNC) {
+if (importJsonBtn && jsonFileInputEl) {
+  importJsonBtn.addEventListener("click", () => {
+    jsonFileInputEl.value = "";
+    jsonFileInputEl.click();
+  });
+}
+
+if (exportJsonBtn) {
+  exportJsonBtn.addEventListener("click", () => {
+    exportTasksJson();
+  });
+}
+
+if (jsonFileInputEl) {
   jsonFileInputEl.addEventListener("change", () => {
     const file = jsonFileInputEl.files && jsonFileInputEl.files[0];
     void loadFromImportedFile(file);
@@ -1496,8 +1539,8 @@ function formatDateWithWeekday(iso) {
   return `${dt.toLocaleDateString("pt-BR")} (${weekdays[dt.getDay()]})`;
 }
 
-setStorageSource("");
-setSyncStatus("");
+setStorageSource("Base: local");
+setSyncStatus("Dados salvos localmente. Use Importar/Exportar JSON para backup.");
 updateNotificationStatus();
 render();
 startAlarmWatcher();

@@ -20,6 +20,8 @@
           <button id="toggle-form-btn" type="button" class="toggle-form-btn">Nova atividade</button>
           <div class="sync-actions">
             <span id="storage-source">Base: local</span>
+            <button id="import-json-btn" type="button" class="sync-btn">Importar JSON</button>
+            <button id="export-json-btn" type="button" class="sync-btn">Exportar JSON</button>
           </div>
         </div>
         <small id="sync-status"></small>
@@ -105,6 +107,8 @@
         </section>
       </section>
     </main>
+
+    <input id="json-file-input" type="file" accept=".json,application/json" hidden />
 
     <template id="task-template">
       <li class="task-item">

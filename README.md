@@ -8,8 +8,14 @@
 - Ver painel mensal com numeracao das atividades.
 
 ## Armazenamento
-- Esta versao salva os dados em modo local (`localStorage`) no navegador/dispositivo.
-- Nao usa login e nao depende de nuvem para funcionar.
+- Modo local (`localStorage`) sempre ativo.
+- Botao `Importar JSON` para carregar uma base existente.
+- Botao `Exportar JSON` para gerar backup manual.
+- Sem login.
+
+## Observacao importante
+- O app funciona no navegador mesmo sem permissao de pasta/arquivo.
+- Para manter historico entre dispositivos, exporte e importe o JSON manualmente.
 
 ## Publicacao no GitHub Pages
 1. Envie:
