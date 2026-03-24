@@ -249,7 +249,7 @@
     "nextDueDate": null,
     "deleted": false,
     "deletedAt": null,
-    "rank": 4096,
+    "rank": 2048,
     "createdAt": 1774124417008,
     "alarmTime": "",
     "alarmTriggeredAt": null
@@ -373,5 +373,35 @@
     "alarmTriggeredAt": null,
     "rank": 1774355656598,
     "createdAt": 1774355656598
+  },
+  {
+    "id": "be3a7e00-5734-46db-ba6e-f7eb36512e06",
+    "title": "Trabalho - EAP Medição",
+    "dueDate": "2026-03-25",
+    "recurrence": "monthly",
+    "completed": false,
+    "completedAt": null,
+    "nextDueDate": null,
+    "deleted": false,
+    "deletedAt": null,
+    "alarmTime": "",
+    "alarmTriggeredAt": null,
+    "rank": 1024,
+    "createdAt": 1774360153587
+  },
+  {
+    "id": "fa1abe18-6b1b-4627-9e00-2487c334fa0d",
+    "title": "Obra - Levar Carrinho Deninho para Fundos",
+    "dueDate": "2026-03-24",
+    "recurrence": "none",
+    "completed": false,
+    "completedAt": null,
+    "nextDueDate": null,
+    "deleted": false,
+    "deletedAt": null,
+    "alarmTime": "",
+    "alarmTriggeredAt": null,
+    "rank": 1774382889486,
+    "createdAt": 1774382889486
   }
 ]
