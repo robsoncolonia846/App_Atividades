@@ -227,8 +227,11 @@ form button[type="submit"]:hover {
 }
 
 .month-day.selected-day {
-  border-color: #0d9488;
-  box-shadow: inset 0 0 0 1px rgba(13, 148, 136, 0.25);
+  border-color: #f97316;
+  background: linear-gradient(180deg, #fff4eb 0%, #ffffff 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(249, 115, 22, 0.28),
+    0 0 0 2px rgba(239, 68, 68, 0.16);
 }
 
 .month-day.today {
@@ -306,6 +309,14 @@ form button[type="submit"]:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+#day-preview-goto {
+  background: #f97316;
+}
+
+#day-preview-goto:hover {
+  background: #dc2626;
 }
 
 .day-preview-close {
@@ -417,11 +428,17 @@ form button[type="submit"]:hover {
 }
 
 .open-subgroup.selected-day-group {
-  border-color: #0d9488;
+  border-color: #f97316;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 0 0 2px rgba(13, 148, 136, 0.22);
-  background: linear-gradient(180deg, #eefaf7 0%, #ffffff 100%);
+    0 0 0 2px rgba(249, 115, 22, 0.26),
+    0 10px 20px rgba(239, 68, 68, 0.08);
+  background: linear-gradient(180deg, #fff5ee 0%, #ffffff 100%);
+}
+
+.open-subgroup.selected-day-group .open-subgroup-title {
+  background: #ffeadd;
+  color: #c2410c;
 }
 
 .open-subgroup-title {

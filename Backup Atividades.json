@@ -242,7 +242,7 @@
   {
     "id": "3226e400-134f-4646-bb79-345f5362bd10",
     "title": "Obra - Rejuntar Casa",
-    "dueDate": "2026-03-25",
+    "dueDate": "2026-03-28",
     "recurrence": "daily",
     "completed": false,
     "completedAt": null,
@@ -394,8 +394,8 @@
     "title": "Obra - Levar Carrinho Deninho para Fundos",
     "dueDate": "2026-03-24",
     "recurrence": "none",
-    "completed": false,
-    "completedAt": null,
+    "completed": true,
+    "completedAt": 1774435478580,
     "nextDueDate": null,
     "deleted": false,
     "deletedAt": null,
@@ -403,5 +403,35 @@
     "alarmTriggeredAt": null,
     "rank": 1774382889486,
     "createdAt": 1774382889486
+  },
+  {
+    "id": "7b4ca9d5-77cd-4505-9785-48663202e6c3",
+    "title": "Tamarinha Ligar Medica",
+    "dueDate": "2026-03-25",
+    "recurrence": "none",
+    "completed": false,
+    "completedAt": null,
+    "nextDueDate": null,
+    "deleted": false,
+    "deletedAt": null,
+    "alarmTime": "",
+    "alarmTriggeredAt": null,
+    "rank": 1774435501838,
+    "createdAt": 1774435501838
+  },
+  {
+    "id": "7664afb8-bd52-4655-a691-458a619138fc",
+    "title": "Tamarinha - Pegar papel na Médica",
+    "dueDate": "2026-03-26",
+    "recurrence": "none",
+    "completed": false,
+    "completedAt": null,
+    "nextDueDate": null,
+    "deleted": false,
+    "deletedAt": null,
+    "alarmTime": "",
+    "alarmTriggeredAt": null,
+    "rank": 1774435665555,
+    "createdAt": 1774435665555
   }
 ]
