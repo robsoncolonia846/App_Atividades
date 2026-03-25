@@ -1167,14 +1167,22 @@ function findTouchDropTarget(draggedId, clientY) {
       return candidateTask && getTaskCalendarDate(candidateTask) === getTaskCalendarDate(draggedTask);
     });
 
+  let nearest = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
   for (const item of candidates) {
     const rect = item.getBoundingClientRect();
     if (clientY >= rect.top && clientY <= rect.bottom) {
       return item;
     }
+
+    const distance = clientY < rect.top ? rect.top - clientY : clientY - rect.bottom;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = item;
+    }
   }
 
-  return null;
+  return nearest;
 }
 
 function attachDragHandlers(node, task, mode) {
@@ -1218,7 +1226,11 @@ function attachDragHandlers(node, task, mode) {
 
   node.addEventListener("pointerdown", (event) => {
     if (event.pointerType !== "touch") return;
-    if (event.target.closest("button, input, select, label")) return;
+    const targetEl = event.target instanceof Element ? event.target : null;
+    if (targetEl && targetEl.closest("button, input, select, label")) return;
+
+    const previousTouchAction = node.style.touchAction;
+    node.style.touchAction = "none";
 
     try {
       node.setPointerCapture(event.pointerId);
@@ -1234,6 +1246,7 @@ function attachDragHandlers(node, task, mode) {
       dragging: false,
       targetId: null,
       placement: null,
+      previousTouchAction,
     };
   });
 
@@ -1244,7 +1257,7 @@ function attachDragHandlers(node, task, mode) {
     const movedY = Math.abs(event.clientY - dragState.startY);
 
     if (!dragState.dragging) {
-      if (Math.max(movedX, movedY) < 10) return;
+      if (Math.max(movedX, movedY) < 6) return;
       dragState.dragging = true;
       node.classList.add("is-dragging");
     }
@@ -1277,9 +1290,10 @@ function attachDragHandlers(node, task, mode) {
       // Ignore browsers that do not support capture release here.
     }
 
-    const { dragging, targetId, placement } = dragState;
+    const { dragging, targetId, placement, previousTouchAction } = dragState;
     dragState = null;
     clearDragIndicators();
+    node.style.touchAction = previousTouchAction || "";
 
     if (!dragging || !targetId || !placement) return;
     moveTaskByDrag(task.id, targetId, placement);
