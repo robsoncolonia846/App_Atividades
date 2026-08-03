@@ -352,6 +352,14 @@ form button[type="submit"]:hover {
   margin-bottom: 8px;
 }
 
+.list-card {
+  padding-top: 10px;
+}
+
+.list-head h2 {
+  margin: 0;
+}
+
 .task-section {
   margin-top: 12px;
 }

@@ -25,6 +25,7 @@ const cancelEditBtn = document.getElementById("cancel-edit-btn");
 
 const openListEl = document.getElementById("task-list-open");
 const overdueListEl = document.getElementById("task-list-overdue");
+const overdueSectionEl = document.getElementById("overdue-section");
 const doneListEl = document.getElementById("task-list-done");
 const deletedListEl = document.getElementById("task-list-deleted");
 const template = document.getElementById("task-template");
@@ -1591,8 +1592,9 @@ function render() {
   const doneTasks = sortDoneTasks(activeTasks.filter((t) => t.completed));
   const deletedTasks = sortDeletedTasks(tasks.filter((t) => t.deleted));
 
+  overdueSectionEl.hidden = overdueTasks.length === 0;
   if (overdueTasks.length === 0) {
-    overdueListEl.innerHTML = '<li class="empty-state">Nenhuma atividade atrasada.</li>';
+    overdueListEl.innerHTML = "";
   } else {
     for (const task of overdueTasks) {
       overdueListEl.appendChild(renderTask(task, "open"));
