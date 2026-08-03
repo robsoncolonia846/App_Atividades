@@ -356,6 +356,14 @@ form button[type="submit"]:hover {
   padding-top: 10px;
 }
 
+.list-card > .overdue-section {
+  margin-top: 0;
+}
+
+.overdue-section[hidden] + .task-section {
+  margin-top: 0;
+}
+
 .list-head h2 {
   margin: 0;
 }

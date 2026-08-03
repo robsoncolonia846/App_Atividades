@@ -1631,7 +1631,7 @@ function render() {
     }
   }
 
-  statsEl.textContent = "";
+  if (statsEl) statsEl.textContent = "";
   renderMonthlyPanel();
   renderDayPreview();
   applySelectedDayGroupHighlight();
