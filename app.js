@@ -8,6 +8,7 @@ const JSON_PICKER_ID = "atividades-json-base";
 const IMPORT_HANDLE_KEY = "import_json_handle";
 
 const form = document.getElementById("task-form");
+const formCard = document.getElementById("form-card");
 const toggleFormBtn = document.getElementById("toggle-form-btn");
 const syncJsonBtn = document.getElementById("sync-json-btn");
 const importJsonBtn = document.getElementById("import-json-btn");
@@ -55,10 +56,11 @@ let fileSyncTimer = null;
 let isWritingFile = false;
 
 function setSyncStatus(text) {
-  syncStatusEl.textContent = text;
+  if (syncStatusEl) syncStatusEl.textContent = text;
 }
 
 function setStorageSource(text) {
+  if (!storageSourceEl) return;
   storageSourceEl.textContent = text;
   storageSourceEl.hidden = !text;
 }
@@ -572,8 +574,10 @@ function animateTaskReorder(beforePositions) {
 
 function setFormOpen(open) {
   formOpen = open;
-  form.hidden = !open;
-  toggleFormBtn.textContent = open ? "Fechar formulario" : "Nova atividade";
+  formCard.hidden = !open;
+  toggleFormBtn.setAttribute("aria-expanded", String(open));
+  toggleFormBtn.setAttribute("aria-label", open ? "Fechar formulario" : "Adicionar atividade");
+  toggleFormBtn.title = open ? "Fechar formulario" : "Adicionar atividade";
 }
 
 toggleFormBtn.addEventListener("click", () => {

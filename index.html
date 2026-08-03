@@ -10,23 +10,20 @@
   </head>
   <body>
     <main class="app">
-      <header class="hero">
+      <header class="app-header">
         <h1>Minhas Atividades</h1>
-        <p>Organize por data, conclua e reagende quando precisar.</p>
+        <button
+          id="toggle-form-btn"
+          type="button"
+          class="toggle-form-btn"
+          aria-label="Adicionar atividade"
+          aria-expanded="false"
+          title="Adicionar atividade"
+        >+</button>
       </header>
 
-      <section class="card form-card">
-        <div class="top-actions">
-          <button id="toggle-form-btn" type="button" class="toggle-form-btn">Nova atividade</button>
-          <div class="sync-actions">
-            <span id="storage-source">Base: local</span>
-            <button id="import-json-btn" type="button" class="sync-btn">Importar JSON</button>
-            <button id="export-json-btn" type="button" class="sync-btn">Exportar JSON</button>
-          </div>
-        </div>
-        <small id="sync-status"></small>
-
-        <form id="task-form" hidden>
+      <section id="form-card" class="card form-card" hidden>
+        <form id="task-form">
           <label>
             Atividade
             <input id="title" name="title" type="text" placeholder="Ex.: Estudar ingles" required maxlength="80" />
@@ -113,8 +110,6 @@
         </section>
       </section>
     </main>
-
-    <input id="json-file-input" type="file" accept=".json,application/json,text/plain" hidden />
 
     <template id="task-template">
       <li class="task-item">
