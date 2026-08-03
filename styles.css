@@ -456,6 +456,14 @@ form button[type="submit"]:hover {
   gap: 8px;
 }
 
+.open-subgroup-list .meta-date {
+  display: none;
+}
+
+.open-subgroup-list .meta-line {
+  margin-top: 5px;
+}
+
 .task-item {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
