@@ -122,12 +122,14 @@
             <span class="meta-date"></span>
             <button class="btn-postpone-minus" title="Jogar para tras" type="button">-1 dia</button>
             <button class="btn-postpone" title="Jogar para frente" type="button">+1 dia</button>
-            <button class="btn-calendar" title="Escolher data" type="button">Data</button>
+            <span class="date-control">
+              <button class="btn-calendar" title="Escolher data" type="button" tabindex="-1">Data</button>
+              <input class="date-picker-inline" type="date" aria-label="Escolher data" />
+            </span>
             <button class="btn-delete danger" title="Excluir" type="button">Excluir</button>
             <button class="btn-move-up" title="Subir na data" type="button">↑</button>
             <button class="btn-move-down" title="Descer na data" type="button">↓</button>
             <button class="btn-restore" title="Usar novamente" type="button">Reutilizar</button>
-            <input class="date-picker-inline" type="date" />
           </div>
           <p class="meta-extra"></p>
         </div>

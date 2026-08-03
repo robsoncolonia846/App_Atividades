@@ -1379,24 +1379,9 @@ function renderTask(task, mode) {
     }
 
     toggleBtn.addEventListener("click", () => toggleComplete(task.id));
-    dateBtn.addEventListener("click", () => {
-      datePicker.classList.add("show");
-      try {
-        datePicker.showPicker();
-      } catch {
-        datePicker.focus();
-        datePicker.click();
-      }
-    });
-
     datePicker.addEventListener("change", () => {
       if (!datePicker.value) return;
       updateTaskDate(task.id, datePicker.value);
-      datePicker.classList.remove("show");
-    });
-
-    datePicker.addEventListener("blur", () => {
-      datePicker.classList.remove("show");
     });
 
     minusBtn.addEventListener("click", () => postpone(task.id, -1));
