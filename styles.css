@@ -590,6 +590,7 @@ form button[type="submit"]:hover {
 }
 
 .meta-date {
+  display: none;
   color: var(--muted);
   font-size: 0.85rem;
 }
